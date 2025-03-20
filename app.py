@@ -381,99 +381,99 @@ def enhance_image_for_detection(image):
 
 # detect_datamatrix 함수 개선
 def detect_datamatrix(image):
-    """이미지에서 DataMatrix 바코드 검출 (pylibdmtx 및 pyzbar 병행 사용)"""
+    """개선된 이미지 처리로 DataMatrix 바코드 검출 (pyzbar 사용)"""
+    # 디버그 모드 정의
+    debug_mode = False
+    if 'debug_mode' in st.session_state:
+        debug_mode = st.session_state.debug_mode
+    
     # 가져오기
-    from pylibdmtx.pylibdmtx import decode as dmtx_decode
     from pyzbar.pyzbar import decode as zbar_decode
     from pyzbar.pyzbar import ZBarSymbol
     
-    # 원본 이미지 전처리
+    # 원본 이미지 전처리 (기존 Colab 코드의 강력한 이미지 처리 기법 적용)
     processed_images = enhance_image_for_detection(image)
     
-    if 'debug_mode' in globals() and debug_mode:
+    if debug_mode:
         st.subheader("이미지 처리 과정")
         cols = st.columns(4)
-        for i, img in enumerate(processed_images[:12]):  # 처음 12개만 표시
+        for i, img in enumerate(processed_images[:12]):
             with cols[i % 4]:
                 st.image(img, caption=f"처리 {i+1}", width=150)
     
     all_results = []
     
-    # 단계 1: pylibdmtx로 원본 이미지의 다양한 처리 버전에서 바코드 검출 시도
+    # DataMatrix 형식으로 제한
+    symbols = [ZBarSymbol.DATAMATRIX]
+    
+    # 1단계: 원본 이미지 처리 버전에서 바코드 검출
     for img in processed_images:
         try:
-            # pylibdmtx 사용 시도
-            results = dmtx_decode(np.array(img), timeout=3000, max_count=10)
+            results = zbar_decode(np.array(img), symbols=symbols)
             if results:
                 all_results.extend(results)
         except Exception as e:
-            if 'debug_mode' in globals() and debug_mode:
-                st.warning(f"pylibdmtx 디코딩 중 오류: {str(e)}")
+            continue
     
-    # 단계 2: 이미지 분할 접근 (pylibdmtx 사용)
-    if len(all_results) < 2:  # 아직 두 개의 바코드를 찾지 못했다면
-        # 이미지 분할
+    # 2단계: 이미지 분할 접근 (더 세밀하게)
+    if len(all_results) < 2:
+        # 더 세밀한 이미지 분할 (기존 Colab 코드보다 더 많은 구역으로 분할)
         sections = split_image_for_detection(image)
         
-        # 각 섹션에서 바코드 검출
         for section in sections:
-            # 섹션 전처리
+            # 각 섹션 전처리
             section_processed = enhance_image_for_detection(section)
             
-            # 처리된 각 섹션에서 바코드 검출
             for img in section_processed:
                 try:
-                    # pylibdmtx 사용
-                    results = dmtx_decode(np.array(img), timeout=3000, max_count=10)
+                    results = zbar_decode(np.array(img), symbols=symbols)
                     if results:
                         all_results.extend(results)
                 except Exception as e:
-                    continue  # 에러는 무시하고 계속 진행
+                    continue
     
-    # 단계 3: 여전히 충분한 결과가 없다면 pyzbar 사용 (백업으로)
+    # 3단계: 추가 이미지 변형 시도 (마지막 시도)
     if len(all_results) < 2:
-        # 먼저 원본 이미지에서 시도
-        for img in processed_images:
-            try:
-                # pyzbar 사용, DataMatrix 형식만 검출
-                results = zbar_decode(np.array(img), symbols=[ZBarSymbol.DATAMATRIX])
-                if results:
-                    all_results.extend(results)
-            except Exception as e:
-                continue
-        
-        # 여전히 충분한 결과가 없다면 분할된 이미지에서 시도
-        if len(all_results) < 2:
-            for section in split_image_for_detection(image):
-                for img in enhance_image_for_detection(section):
+        # 원본 이미지에 추가 변형 적용
+        img_array = np.array(image)
+        if len(img_array.shape) == 3:
+            gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = img_array
+            
+        # 다양한 회전 각도 시도
+        for angle in [0, 90, 180, 270]:
+            if angle > 0:
+                rotated = Image.fromarray(cv2.rotate(gray, {
+                    90: cv2.ROTATE_90_CLOCKWISE,
+                    180: cv2.ROTATE_180,
+                    270: cv2.ROTATE_90_COUNTERCLOCKWISE
+                }.get(angle)))
+                
+                # 회전된 이미지에 대해 모든 전처리와 검출 과정 반복
+                rot_processed = enhance_image_for_detection(rotated)
+                for img in rot_processed:
                     try:
-                        results = zbar_decode(np.array(img), symbols=[ZBarSymbol.DATAMATRIX])
+                        results = zbar_decode(np.array(img), symbols=symbols)
                         if results:
                             all_results.extend(results)
                     except Exception as e:
                         continue
     
-    # 중복 제거 및 결과 처리
+    # 중복 제거
     unique_data = set()
     decoded_data = []
     
     for result in all_results:
         try:
-            # pylibdmtx와 pyzbar 모두 호환되는 방식으로 처리
-            if hasattr(result, 'data'):
-                data = result.data.decode('utf-8', errors='replace')
-            else:
-                data = result.decoded.decode('utf-8', errors='replace')
-                
+            data = result.data.decode('utf-8', errors='replace')
             if data not in unique_data:
                 unique_data.add(data)
                 decoded_data.append(data)
         except Exception as e:
-            if 'debug_mode' in globals() and debug_mode:
-                st.warning(f"결과 디코딩 중 오류: {str(e)}")
             continue
     
-    # 디버깅 정보 출력
+    # 결과 보고
     if decoded_data:
         st.info(f"총 {len(all_results)}개의 바코드 후보를 찾았고, 중복 제거 후 {len(decoded_data)}개 바코드 식별")
     
