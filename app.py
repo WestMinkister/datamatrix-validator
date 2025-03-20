@@ -237,12 +237,21 @@ def cross_validate_matrices(matrix_44x44, matrix_18x18):
 # =========================================================
 
 def split_image_for_detection(image):
-    """이미지를 여러 영역으로 분할하여 바코드 인식률 향상"""
+    """이미지를 여러 영역으로 분할하여 바코드 인식률 향상 (개선)"""
     width, height = image.size
     sections = []
     
     # 원본 이미지 추가
     sections.append(image)
+    
+    # 이미지를 더 세밀하게 분할 (4x4 그리드)
+    for x in range(4):
+        for y in range(4):
+            x_start = (width * x) // 4
+            y_start = (height * y) // 4
+            x_end = (width * (x + 1)) // 4
+            y_end = (height * (y + 1)) // 4
+            sections.append(image.crop((x_start, y_start, x_end, y_end)))
     
     # 이미지를 상하좌우로 분할 (4분할)
     half_width = width // 2
@@ -269,10 +278,22 @@ def split_image_for_detection(image):
     sections.append(image.crop((third_width, 0, 2*third_width, height)))
     sections.append(image.crop((2*third_width, 0, width, height)))
     
+    # 겹치는 부분으로 추가 분할 (더 높은 확률로 바코드 포함)
+    quarter_width = width // 4
+    quarter_height = height // 4
+    
+    # 중앙 영역
+    sections.append(image.crop((quarter_width, quarter_height, 3*quarter_width, 3*quarter_height)))
+    
+    # 이미지 회전 변형 추가
+    for angle in [90, 180, 270]:
+        rotated = image.rotate(angle, expand=True)
+        sections.append(rotated)
+    
     return sections
 
 def enhance_image_for_detection(image):
-    """이미지 전처리를 통해 DataMatrix 인식률 향상 (개선 버전)"""
+    """이미지 전처리를 통해 DataMatrix 인식률 향상 (강화된 버전)"""
     # OpenCV로 이미지 처리
     img_array = np.array(image)
     
@@ -284,61 +305,74 @@ def enhance_image_for_detection(image):
     else:  # 이미 그레이스케일인 경우
         gray = img_array
     
+    # 결과에 그레이스케일 이미지 추가
+    results.append(Image.fromarray(gray))
+    
     # 기본 처리: 노이즈 제거
     denoised = cv2.GaussianBlur(gray, (5, 5), 0)
+    results.append(Image.fromarray(denoised))
     
     # 이미지 크기 조정 (확대)
     height, width = gray.shape
-    scale_factors = [1.5, 2.0]
+    scale_factors = [1.5, 2.0, 3.0]  # 더 높은 배율 추가
     for scale in scale_factors:
         resized = cv2.resize(gray, (int(width * scale), int(height * scale)), 
                             interpolation=cv2.INTER_CUBIC)
         results.append(Image.fromarray(resized))
     
-    # 여러 이진화 방법 적용
-    # 1. 적응형 이진화 (Adaptive Thresholding)
-    binary_adaptive = cv2.adaptiveThreshold(denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                           cv2.THRESH_BINARY, 11, 2)
-    results.append(Image.fromarray(binary_adaptive))
-    
-    # 2. Otsu 이진화
-    _, binary_otsu = cv2.threshold(denoised, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    results.append(Image.fromarray(binary_otsu))
-    
-    # 3. 반전된 이진화 (바코드가 역상인 경우)
-    _, binary_inv = cv2.threshold(denoised, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-    results.append(Image.fromarray(binary_inv))
-    
-    # 대비 향상 (CLAHE)
+    # 대비 향상
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     enhanced = clahe.apply(gray)
     results.append(Image.fromarray(enhanced))
     
-    # CLAHE 적용 후 이진화
-    _, clahe_binary = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    results.append(Image.fromarray(clahe_binary))
+    # 다양한 임계값으로 이진화 시도
+    thresholds = [100, 127, 150, 180]
+    for thresh in thresholds:
+        _, binary = cv2.threshold(gray, thresh, 255, cv2.THRESH_BINARY)
+        results.append(Image.fromarray(binary))
+        
+        # 반전된 이진화 추가
+        _, binary_inv = cv2.threshold(gray, thresh, 255, cv2.THRESH_BINARY_INV)
+        results.append(Image.fromarray(binary_inv))
     
-    # 모폴로지 연산
-    kernels = [(3, 3), (5, 5)]
+    # 적응형 이진화 (Adaptive Thresholding)
+    binary_adaptive1 = cv2.adaptiveThreshold(denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                           cv2.THRESH_BINARY, 11, 2)
+    results.append(Image.fromarray(binary_adaptive1))
+    
+    binary_adaptive2 = cv2.adaptiveThreshold(denoised, 255, cv2.ADAPTIVE_THRESH_MEAN_C, 
+                                           cv2.THRESH_BINARY, 11, 2)
+    results.append(Image.fromarray(binary_adaptive2))
+    
+    # 모폴로지 연산으로 보강
+    kernels = [(3, 3), (5, 5), (7, 7)]
     for k_size in kernels:
         kernel = np.ones(k_size, np.uint8)
         
         # 열림 연산 (침식 후 팽창) - 작은 노이즈 제거
-        morph_open = cv2.morphologyEx(binary_adaptive, cv2.MORPH_OPEN, kernel)
+        morph_open = cv2.morphologyEx(binary_adaptive1, cv2.MORPH_OPEN, kernel)
         results.append(Image.fromarray(morph_open))
         
         # 닫힘 연산 (팽창 후 침식) - 작은 구멍 채우기
-        morph_close = cv2.morphologyEx(binary_adaptive, cv2.MORPH_CLOSE, kernel)
+        morph_close = cv2.morphologyEx(binary_adaptive1, cv2.MORPH_CLOSE, kernel)
         results.append(Image.fromarray(morph_close))
-    
-    # 엣지 검출
-    edges = cv2.Canny(denoised, 50, 150)
-    results.append(Image.fromarray(edges))
+        
+        # 팽창 연산 - 바코드 영역 확장
+        dilated = cv2.dilate(binary_adaptive1, kernel, iterations=1)
+        results.append(Image.fromarray(dilated))
+        
+        # 침식 연산 - 노이즈 제거
+        eroded = cv2.erode(binary_adaptive1, kernel, iterations=1)
+        results.append(Image.fromarray(eroded))
     
     # 선명화 필터
     sharpen_kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
     sharpened = cv2.filter2D(gray, -1, sharpen_kernel)
     results.append(Image.fromarray(sharpened))
+    
+    # 가장자리 강화 (Canny Edge Detection)
+    edges = cv2.Canny(gray, 50, 150)
+    results.append(Image.fromarray(edges))
     
     return results
 
@@ -346,14 +380,27 @@ def detect_datamatrix(image):
     """이미지에서 DataMatrix 바코드 검출 (개선 버전)"""
     # 원본 이미지 전처리
     processed_images = enhance_image_for_detection(image)
+
+    if debug_mode:
+        st.subheader("이미지 처리 과정")
     
+        # 처리된 이미지 중 일부만 표시 (너무 많으면 UI가 느려짐)
+        cols = st.columns(4)
+        for i, img in enumerate(processed_images[:12]):  # 처음 12개만 표시
+            with cols[i % 4]:
+                st.image(img, caption=f"처리 {i+1}", width=150)
+
     all_results = []
+    
+    # pyzbar가 지원하는 모든 타입의 바코드 확인
+    from pyzbar.pyzbar import ZBarSymbol
+    symbols = [ZBarSymbol.DATAMATRIX]  # DataMatrix 형식으로 제한
     
     # 원본 이미지의 다양한 처리 버전에서 바코드 검출 시도
     for img in processed_images:
         try:
-            # pyzbar를 사용한 바코드 검출
-            results = decode(np.array(img))
+            # pyzbar를 사용한, DataMatrix 형식 바코드만 검출
+            results = decode(np.array(img), symbols=symbols)
             if results:
                 all_results.extend(results)
         except Exception as e:
@@ -372,7 +419,7 @@ def detect_datamatrix(image):
             # 처리된 각 섹션에서 바코드 검출
             for img in section_processed:
                 try:
-                    results = decode(np.array(img))
+                    results = decode(np.array(img), symbols=symbols)
                     if results:
                         all_results.extend(results)
                 except Exception as e:
