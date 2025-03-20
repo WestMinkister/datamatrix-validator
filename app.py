@@ -2,23 +2,24 @@ import streamlit as st
 import re
 import os
 import io
-import cv2
 import numpy as np
 import tempfile
 import shutil
-import pandas as pd
 from PIL import Image
-from pylibdmtx.pylibdmtx import decode
+import pandas as pd
 import base64
-import pdf2image
-import pypdfium2 as pdfium
-from openpyxl import load_workbook
-from pptx import Presentation
+import cv2
 
-# 페이지 제목 설정
+# pylibdmtx 대신 pyzbar 사용
+from pyzbar.pyzbar import decode
+# 나머지 import 문...
+import pdf2image
+import pymupdf as fitz
+
+# Streamlit 페이지 설정
 st.set_page_config(page_title="데이터매트릭스 검증기", layout="wide")
 st.title("데이터매트릭스 검증기")
-st.markdown("PDF, PPTX, XLSX 파일의 각 페이지에서 44x44 및 18x18 DataMatrix 바코드를 검색하고 검증합니다.")
+st.markdown("PDF, 이미지 파일의 각 페이지에서 44x44 및 18x18 DataMatrix 바코드를 검색하고 검증합니다.")
 
 # =========================================================
 # 데이터 매트릭스 검증 함수
@@ -351,7 +352,8 @@ def detect_datamatrix(image):
     # 원본 이미지의 다양한 처리 버전에서 바코드 검출 시도
     for img in processed_images:
         try:
-            results = decode(img, timeout=5000, max_count=10)
+            # pyzbar를 사용한 바코드 검출
+            results = decode(np.array(img))
             if results:
                 all_results.extend(results)
         except Exception as e:
@@ -370,7 +372,7 @@ def detect_datamatrix(image):
             # 처리된 각 섹션에서 바코드 검출
             for img in section_processed:
                 try:
-                    results = decode(img, timeout=5000, max_count=10)
+                    results = decode(np.array(img))
                     if results:
                         all_results.extend(results)
                 except Exception as e:
@@ -382,19 +384,20 @@ def detect_datamatrix(image):
     
     for result in all_results:
         try:
+            # pyzbar 결과 처리
             data = result.data.decode('utf-8', errors='replace')
             if data not in unique_data:
                 unique_data.add(data)
                 decoded_data.append(data)
         except Exception as e:
             st.warning(f"결과 디코딩 중 오류 발생: {str(e)}")
+            continue
     
     # 디버깅 정보 출력
     if decoded_data:
         st.info(f"총 {len(all_results)}개의 바코드 후보를 찾았고, 중복 제거 후 {len(decoded_data)}개 바코드 식별")
     
     return decoded_data
-
 # =========================================================
 # 파일 처리 함수
 # =========================================================
@@ -410,15 +413,14 @@ def extract_images_from_file(uploaded_file):
         image = Image.open(io.BytesIO(file_content))
         return {1: [image]}  # 슬라이드 1에 이미지 할당
     
-    # PDF 또는 Office 파일인 경우 별도 처리
+    # PDF 파일인 경우 별도 처리
     if file_extension == 'pdf':
         try:
             with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as temp_file:
                 temp_file.write(file_content)
                 temp_path = temp_file.name
             
-            # PDF를 이미지로 변환 (외부 라이브러리 사용)
-            import fitz  # PyMuPDF
+            # PyMuPDF를 사용하여 PDF를 이미지로 변환
             doc = fitz.open(temp_path)
             slide_images = {}
             
@@ -437,12 +439,29 @@ def extract_images_from_file(uploaded_file):
             return slide_images
         except Exception as e:
             st.error(f"PDF 변환 중 오류: {str(e)}")
-            return {}
-    
-    # Office 파일은 웹 애플리케이션에서 직접 처리하기 어려움을 안내
-    if file_extension in ['xlsx', 'xls', 'pptx', 'ppt', 'docx', 'doc']:
-        st.warning(f"{file_extension.upper()} 파일은 현재 웹 버전에서 완전히 지원되지 않습니다. 이미지 파일이나 PDF로 변환하여 업로드하세요.")
-        return {}
+            
+            # pdf2image를 대체 방법으로 시도
+            try:
+                with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as temp_file:
+                    temp_file.write(file_content)
+                    temp_path = temp_file.name
+                
+                # pdf2image로 PDF에서 이미지 추출
+                images = pdf2image.convert_from_path(temp_path, dpi=300)
+                
+                slide_images = {}
+                for i, image in enumerate(images):
+                    slide_num = i + 1
+                    if slide_num not in slide_images:
+                        slide_images[slide_num] = []
+                    slide_images[slide_num].append(image)
+                
+                # 임시 파일 삭제
+                os.unlink(temp_path)
+                return slide_images
+            except Exception as e2:
+                st.error(f"PDF 변환 대체 방법도 실패: {str(e2)}")
+                return {}
     
     # 지원되지 않는 파일 형식
     st.error(f"지원되지 않는 파일 형식: {file_extension}")
@@ -650,7 +669,7 @@ def main():
     else:
         # 파일 업로드 섹션
         st.markdown("## 파일 업로드")
-        st.markdown("이미지(.jpg, .png), PDF(.pdf) 파일을 업로드하세요.")
+        st.markdown("이미지(.jpg, .png) 또는 PDF(.pdf) 파일을 업로드하세요.")
         uploaded_file = st.file_uploader("파일 선택", type=["jpg", "jpeg", "png", "pdf"])
         
         if uploaded_file is not None:
