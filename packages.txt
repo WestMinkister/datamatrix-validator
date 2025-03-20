@@ -1,2 +1,4 @@
 libzbar0
 libzbar-dev
+libdmtx0b
+libdmtx-dev
