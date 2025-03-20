@@ -21,6 +21,9 @@ st.set_page_config(page_title="데이터매트릭스 검증기", layout="wide")
 st.title("데이터매트릭스 검증기")
 st.markdown("PDF, 이미지 파일의 각 페이지에서 44x44 및 18x18 DataMatrix 바코드를 검색하고 검증합니다.")
 
+# 전역 변수로 debug_mode 선언
+debug_mode = False
+
 # =========================================================
 # 데이터 매트릭스 검증 함수
 # =========================================================
@@ -376,42 +379,43 @@ def enhance_image_for_detection(image):
     
     return results
 
+# detect_datamatrix 함수 개선
 def detect_datamatrix(image):
-    """이미지에서 DataMatrix 바코드 검출 (개선 버전)"""
+    """이미지에서 DataMatrix 바코드 검출 (pylibdmtx 및 pyzbar 병행 사용)"""
+    # 가져오기
+    from pylibdmtx.pylibdmtx import decode as dmtx_decode
+    from pyzbar.pyzbar import decode as zbar_decode
+    from pyzbar.pyzbar import ZBarSymbol
+    
     # 원본 이미지 전처리
     processed_images = enhance_image_for_detection(image)
-
-    if debug_mode:
-        st.subheader("이미지 처리 과정")
     
-        # 처리된 이미지 중 일부만 표시 (너무 많으면 UI가 느려짐)
+    if 'debug_mode' in globals() and debug_mode:
+        st.subheader("이미지 처리 과정")
         cols = st.columns(4)
         for i, img in enumerate(processed_images[:12]):  # 처음 12개만 표시
             with cols[i % 4]:
                 st.image(img, caption=f"처리 {i+1}", width=150)
-
+    
     all_results = []
     
-    # pyzbar가 지원하는 모든 타입의 바코드 확인
-    from pyzbar.pyzbar import ZBarSymbol
-    symbols = [ZBarSymbol.DATAMATRIX]  # DataMatrix 형식으로 제한
-    
-    # 원본 이미지의 다양한 처리 버전에서 바코드 검출 시도
+    # 단계 1: pylibdmtx로 원본 이미지의 다양한 처리 버전에서 바코드 검출 시도
     for img in processed_images:
         try:
-            # pyzbar를 사용한, DataMatrix 형식 바코드만 검출
-            results = decode(np.array(img), symbols=symbols)
+            # pylibdmtx 사용 시도
+            results = dmtx_decode(np.array(img), timeout=3000, max_count=10)
             if results:
                 all_results.extend(results)
         except Exception as e:
-            st.warning(f"디코딩 중 오류 발생: {str(e)}")
+            if 'debug_mode' in globals() and debug_mode:
+                st.warning(f"pylibdmtx 디코딩 중 오류: {str(e)}")
     
-    # 이미지가 복잡하거나 바코드가 작을 경우를 위해 이미지 분할 접근
+    # 단계 2: 이미지 분할 접근 (pylibdmtx 사용)
     if len(all_results) < 2:  # 아직 두 개의 바코드를 찾지 못했다면
         # 이미지 분할
         sections = split_image_for_detection(image)
         
-        # 각 섹션에 전처리 적용 및 바코드 검출
+        # 각 섹션에서 바코드 검출
         for section in sections:
             # 섹션 전처리
             section_processed = enhance_image_for_detection(section)
@@ -419,25 +423,54 @@ def detect_datamatrix(image):
             # 처리된 각 섹션에서 바코드 검출
             for img in section_processed:
                 try:
-                    results = decode(np.array(img), symbols=symbols)
+                    # pylibdmtx 사용
+                    results = dmtx_decode(np.array(img), timeout=3000, max_count=10)
                     if results:
                         all_results.extend(results)
                 except Exception as e:
                     continue  # 에러는 무시하고 계속 진행
     
-    # 중복 제거 (바코드 값 기준)
+    # 단계 3: 여전히 충분한 결과가 없다면 pyzbar 사용 (백업으로)
+    if len(all_results) < 2:
+        # 먼저 원본 이미지에서 시도
+        for img in processed_images:
+            try:
+                # pyzbar 사용, DataMatrix 형식만 검출
+                results = zbar_decode(np.array(img), symbols=[ZBarSymbol.DATAMATRIX])
+                if results:
+                    all_results.extend(results)
+            except Exception as e:
+                continue
+        
+        # 여전히 충분한 결과가 없다면 분할된 이미지에서 시도
+        if len(all_results) < 2:
+            for section in split_image_for_detection(image):
+                for img in enhance_image_for_detection(section):
+                    try:
+                        results = zbar_decode(np.array(img), symbols=[ZBarSymbol.DATAMATRIX])
+                        if results:
+                            all_results.extend(results)
+                    except Exception as e:
+                        continue
+    
+    # 중복 제거 및 결과 처리
     unique_data = set()
     decoded_data = []
     
     for result in all_results:
         try:
-            # pyzbar 결과 처리
-            data = result.data.decode('utf-8', errors='replace')
+            # pylibdmtx와 pyzbar 모두 호환되는 방식으로 처리
+            if hasattr(result, 'data'):
+                data = result.data.decode('utf-8', errors='replace')
+            else:
+                data = result.decoded.decode('utf-8', errors='replace')
+                
             if data not in unique_data:
                 unique_data.add(data)
                 decoded_data.append(data)
         except Exception as e:
-            st.warning(f"결과 디코딩 중 오류 발생: {str(e)}")
+            if 'debug_mode' in globals() and debug_mode:
+                st.warning(f"결과 디코딩 중 오류: {str(e)}")
             continue
     
     # 디버깅 정보 출력
@@ -445,13 +478,14 @@ def detect_datamatrix(image):
         st.info(f"총 {len(all_results)}개의 바코드 후보를 찾았고, 중복 제거 후 {len(decoded_data)}개 바코드 식별")
     
     return decoded_data
+
 # =========================================================
 # 파일 처리 함수
 # =========================================================
 
-@st.cache_data
+# PDF 처리 함수 개선
 def extract_images_from_file(uploaded_file):
-    """업로드된 파일에서 이미지 추출"""
+    """업로드된 파일에서 이미지 추출 (개선)"""
     file_content = uploaded_file.read()
     file_extension = uploaded_file.name.split('.')[-1].lower()
     
@@ -460,20 +494,22 @@ def extract_images_from_file(uploaded_file):
         image = Image.open(io.BytesIO(file_content))
         return {1: [image]}  # 슬라이드 1에 이미지 할당
     
-    # PDF 파일인 경우 별도 처리
+    # PDF 파일인 경우 다양한 방법으로 처리
     if file_extension == 'pdf':
+        slide_images = {}
+        
+        # 방법 1: PyMuPDF (가장 빠름)
         try:
             with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as temp_file:
                 temp_file.write(file_content)
                 temp_path = temp_file.name
             
-            # PyMuPDF를 사용하여 PDF를 이미지로 변환
             doc = fitz.open(temp_path)
-            slide_images = {}
             
             for page_index in range(len(doc)):
                 page = doc.load_page(page_index)
-                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # 더 높은 해상도
+                # 고해상도 설정 (3x)
+                pix = page.get_pixmap(matrix=fitz.Matrix(3, 3))
                 img_data = pix.tobytes("png")
                 image = Image.open(io.BytesIO(img_data))
                 slide_num = page_index + 1
@@ -481,38 +517,121 @@ def extract_images_from_file(uploaded_file):
                     slide_images[slide_num] = []
                 slide_images[slide_num].append(image)
             
-            # 임시 파일 삭제
             os.unlink(temp_path)
-            return slide_images
+            
+            if slide_images:  # 성공적으로 이미지를 추출한 경우
+                return slide_images
+        except Exception as e:
+            st.warning(f"PyMuPDF로 PDF 변환 중 오류: {str(e)}")
+        
+        # 방법 2: pdf2image 시도 (poppler 필요)
+        try:
+            with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as temp_file:
+                temp_file.write(file_content)
+                temp_path = temp_file.name
+            
+            # pdf2image로 PDF에서 이미지 추출
+            images = pdf2image.convert_from_path(temp_path, dpi=300)
+            
+            for i, image in enumerate(images):
+                slide_num = i + 1
+                if slide_num not in slide_images:
+                    slide_images[slide_num] = []
+                slide_images[slide_num].append(image)
+            
+            os.unlink(temp_path)
+            
+            if slide_images:  # 성공적으로 이미지를 추출한 경우
+                return slide_images
         except Exception as e:
             st.error(f"PDF 변환 중 오류: {str(e)}")
-            
-            # pdf2image를 대체 방법으로 시도
-            try:
-                with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as temp_file:
-                    temp_file.write(file_content)
-                    temp_path = temp_file.name
-                
-                # pdf2image로 PDF에서 이미지 추출
-                images = pdf2image.convert_from_path(temp_path, dpi=300)
-                
-                slide_images = {}
-                for i, image in enumerate(images):
-                    slide_num = i + 1
-                    if slide_num not in slide_images:
-                        slide_images[slide_num] = []
-                    slide_images[slide_num].append(image)
-                
-                # 임시 파일 삭제
-                os.unlink(temp_path)
-                return slide_images
-            except Exception as e2:
-                st.error(f"PDF 변환 대체 방법도 실패: {str(e2)}")
-                return {}
+        
+        # 모든 방법이 실패한 경우
+        if not slide_images:
+            st.error("PDF에서 이미지를 추출할 수 없습니다.")
+            return {}
     
     # 지원되지 않는 파일 형식
     st.error(f"지원되지 않는 파일 형식: {file_extension}")
     return {}
+
+
+@st.cache_data
+# 이미지 전처리 함수 개선
+def enhance_image_for_detection(image):
+    """이미지 전처리를 통해 DataMatrix 인식률 향상 (개선 버전)"""
+    # OpenCV로 이미지 처리
+    img_array = np.array(image)
+    
+    results = [image]  # 원본 이미지 포함
+    
+    # 그레이스케일로 변환
+    if len(img_array.shape) == 3:  # 컬러 이미지인 경우
+        gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+    else:  # 이미 그레이스케일인 경우
+        gray = img_array
+    
+    # 결과에 그레이스케일 이미지 추가
+    results.append(Image.fromarray(gray))
+    
+    # 기본 처리: 노이즈 제거
+    denoised = cv2.GaussianBlur(gray, (5, 5), 0)
+    results.append(Image.fromarray(denoised))
+    
+    # 이미지 크기 조정 (확대)
+    height, width = gray.shape
+    scale_factors = [1.5, 2.0, 3.0]  # 더 높은 배율 추가
+    for scale in scale_factors:
+        resized = cv2.resize(gray, (int(width * scale), int(height * scale)), 
+                            interpolation=cv2.INTER_CUBIC)
+        results.append(Image.fromarray(resized))
+    
+    # 여러 이진화 방법 적용
+    # 1. 적응형 이진화 (Adaptive Thresholding)
+    binary_adaptive = cv2.adaptiveThreshold(denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                           cv2.THRESH_BINARY, 11, 2)
+    results.append(Image.fromarray(binary_adaptive))
+    
+    # 2. Otsu 이진화
+    _, binary_otsu = cv2.threshold(denoised, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    results.append(Image.fromarray(binary_otsu))
+    
+    # 3. 반전된 이진화 (바코드가 역상인 경우)
+    _, binary_inv = cv2.threshold(denoised, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    results.append(Image.fromarray(binary_inv))
+    
+    # 대비 향상 (CLAHE)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    enhanced = clahe.apply(gray)
+    results.append(Image.fromarray(enhanced))
+    
+    # CLAHE 적용 후 이진화
+    _, clahe_binary = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    results.append(Image.fromarray(clahe_binary))
+    
+    # 모폴로지 연산
+    kernels = [(3, 3), (5, 5)]
+    for k_size in kernels:
+        kernel = np.ones(k_size, np.uint8)
+        
+        # 열림 연산 (침식 후 팽창) - 작은 노이즈 제거
+        morph_open = cv2.morphologyEx(binary_adaptive, cv2.MORPH_OPEN, kernel)
+        results.append(Image.fromarray(morph_open))
+        
+        # 닫힘 연산 (팽창 후 침식) - 작은 구멍 채우기
+        morph_close = cv2.morphologyEx(binary_adaptive, cv2.MORPH_CLOSE, kernel)
+        results.append(Image.fromarray(morph_close))
+    
+    # 엣지 검출
+    edges = cv2.Canny(denoised, 50, 150)
+    results.append(Image.fromarray(edges))
+    
+    # 선명화 필터
+    sharpen_kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
+    sharpened = cv2.filter2D(gray, -1, sharpen_kernel)
+    results.append(Image.fromarray(sharpened))
+    
+    return results
 
 # =========================================================
 # 결과 출력 함수
