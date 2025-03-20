@@ -379,19 +379,18 @@ def enhance_image_for_detection(image):
     
     return results
 
-# detect_datamatrix 함수 개선
 def detect_datamatrix(image):
     """개선된 이미지 처리로 DataMatrix 바코드 검출 (pyzbar 사용)"""
-    # 디버그 모드 정의
+    # 디버그 모드 정의 (session_state 활용)
     debug_mode = False
-    if 'debug_mode' in st.session_state:
+    if hasattr(st, 'session_state') and 'debug_mode' in st.session_state:
         debug_mode = st.session_state.debug_mode
     
     # 가져오기
     from pyzbar.pyzbar import decode as zbar_decode
     from pyzbar.pyzbar import ZBarSymbol
     
-    # 원본 이미지 전처리 (기존 Colab 코드의 강력한 이미지 처리 기법 적용)
+    # 원본 이미지 전처리 (강화된 이미지 처리 기법 적용)
     processed_images = enhance_image_for_detection(image)
     
     if debug_mode:
@@ -413,11 +412,12 @@ def detect_datamatrix(image):
             if results:
                 all_results.extend(results)
         except Exception as e:
-            continue
+            if debug_mode:
+                st.warning(f"디코딩 중 오류 발생: {str(e)}")
     
     # 2단계: 이미지 분할 접근 (더 세밀하게)
     if len(all_results) < 2:
-        # 더 세밀한 이미지 분할 (기존 Colab 코드보다 더 많은 구역으로 분할)
+        # 더 세밀한 이미지 분할
         sections = split_image_for_detection(image)
         
         for section in sections:
@@ -444,21 +444,25 @@ def detect_datamatrix(image):
         # 다양한 회전 각도 시도
         for angle in [0, 90, 180, 270]:
             if angle > 0:
-                rotated = Image.fromarray(cv2.rotate(gray, {
-                    90: cv2.ROTATE_90_CLOCKWISE,
-                    180: cv2.ROTATE_180,
-                    270: cv2.ROTATE_90_COUNTERCLOCKWISE
-                }.get(angle)))
+                rotated = None
+                if angle == 90:
+                    rotated = cv2.rotate(gray, cv2.ROTATE_90_CLOCKWISE)
+                elif angle == 180:
+                    rotated = cv2.rotate(gray, cv2.ROTATE_180)
+                elif angle == 270:
+                    rotated = cv2.rotate(gray, cv2.ROTATE_90_COUNTERCLOCKWISE)
                 
-                # 회전된 이미지에 대해 모든 전처리와 검출 과정 반복
-                rot_processed = enhance_image_for_detection(rotated)
-                for img in rot_processed:
-                    try:
-                        results = zbar_decode(np.array(img), symbols=symbols)
-                        if results:
-                            all_results.extend(results)
-                    except Exception as e:
-                        continue
+                if rotated is not None:
+                    rotated_pil = Image.fromarray(rotated)
+                    # 회전된 이미지에 대해 모든 전처리와 검출 과정 반복
+                    rot_processed = enhance_image_for_detection(rotated_pil)
+                    for img in rot_processed:
+                        try:
+                            results = zbar_decode(np.array(img), symbols=symbols)
+                            if results:
+                                all_results.extend(results)
+                        except Exception as e:
+                            continue
     
     # 중복 제거
     unique_data = set()
@@ -471,6 +475,8 @@ def detect_datamatrix(image):
                 unique_data.add(data)
                 decoded_data.append(data)
         except Exception as e:
+            if debug_mode:
+                st.warning(f"결과 디코딩 중 오류 발생: {str(e)}")
             continue
     
     # 결과 보고
