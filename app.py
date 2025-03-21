@@ -1,9 +1,18 @@
+import subprocess
+import os
+
+# 초기 설정 스크립트 실행
+try:
+    if os.path.exists("init_script.sh"):
+        subprocess.run(["bash", "init_script.sh"], check=True)
+        st.success("시스템 라이브러리 설치 완료")
+except Exception as e:
+    st.warning(f"시스템 라이브러리 설치 중 오류 발생: {str(e)}")
+
 import streamlit as st
 import io
 import re
-import os
 import tempfile
-import subprocess  # subprocess 모듈 추가
 import sys
 import numpy as np
 from PIL import Image
