@@ -975,7 +975,7 @@ def main():
     security_container = st.container()
     with security_container:
         # 컬럼 비율 조정 (이미지 영역 더 넓게)
-        cols = st.columns([2, 3])
+        cols = st.columns([1, 3])
         
         with cols[0]:
             # 이미지 크기 확대
