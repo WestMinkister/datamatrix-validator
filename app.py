@@ -974,19 +974,31 @@ def main():
     # 보안 배너 추가 (컨테이너 사용)
     security_container = st.container()
     with security_container:
-        cols = st.columns([1, 3])
+        # 컬럼 비율 조정 (이미지 영역 더 넓게)
+        cols = st.columns([2, 3])
+        
         with cols[0]:
-            # 방법 1: 로컬 이미지 파일
+            # 이미지 크기 확대
             try:
                 restricted_img = Image.open("restricted.png")
-                st.image(restricted_img, width=100)
+                st.image(restricted_img, width=200, use_column_width=True)
             except:
-                # 이미지가 없는 경우
-                st.markdown("### ⚠️ 사내한 Restricted")
+                # 이미지가 없는 경우 - 크기 키운 텍스트로 대체
+                st.markdown("""
+                <div style="font-size: 28px; color: #dc3545; text-align: center; margin-top: 20px;">
+                    ⚠️<br>
+                    <span style="font-weight: bold;">사내한<br>Restricted</span>
+                </div>
+                """, unsafe_allow_html=True)
         
         with cols[1]:
-            st.markdown("#### 이 프로그램은 귀사의 자산이므로 취급에 주의하시기 바랍니다.")
-            st.markdown("무단 배포 및 복제를 금지합니다.")
+            # 텍스트 크기와 마진 조정하여 이미지와 높이 맞추기
+            st.markdown("""
+            <div style="margin-top: 25px;">
+                <h3 style="margin-bottom: 15px;">이 프로그램은 귀사의 자산이므로<br>취급에 주의하시기 바랍니다.</h3>
+                <p style="font-size: 18px;">무단 배포 및 복제를 금지합니다.</p>
+            </div>
+            """, unsafe_allow_html=True)
     
     st.markdown("---")  # 구분선
     st.markdown("PDF, PowerPoint, Excel 파일에서 DataMatrix 바코드를 검색하고 검증합니다.")
