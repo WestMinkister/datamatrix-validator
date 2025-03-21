@@ -3,6 +3,8 @@ import io
 import re
 import os
 import tempfile
+import subprocess  # subprocess 모듈 추가
+import sys
 import numpy as np
 from PIL import Image
 import time
@@ -68,6 +70,7 @@ try:
 except ImportError:
     HAVE_PYLIBDMTX = False
     st.warning("pylibdmtx 라이브러리를 불러올 수 없습니다. 바코드 검출 기능을 사용할 수 없습니다.")
+    st.info("pylibdmtx 설치를 위해서는 libdmtx 시스템 라이브러리가 필요합니다.")
     
     # 폴백 함수 정의
     def decode(image, **kwargs):

@@ -4,3 +4,7 @@ libreoffice
 poppler-utils
 libzbar0
 libzbar-dev
+python3-opencv
+python3-pil
+python3-pdf2image
+python3-numpy
