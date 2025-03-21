@@ -12,14 +12,6 @@ import shutil
 import base64
 from io import BytesIO
 
-# 초기 설정 스크립트 실행
-try:
-    if os.path.exists("init_script.sh"):
-        subprocess.run(["bash", "init_script.sh"], check=True)
-        st.success("시스템 라이브러리 설치 완료")
-except Exception as e:
-    st.warning(f"시스템 라이브러리 설치 중 오류 발생: {str(e)}")
-
 # 페이지 설정을 가장 먼저 호출해야 함
 st.set_page_config(
     page_title="DataMatrix 바코드 검증 도구",
@@ -27,6 +19,14 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# 초기 설정 스크립트 실행 (페이지 설정 이후)
+try:
+    if os.path.exists("init_script.sh"):
+        subprocess.run(["bash", "init_script.sh"], check=True)
+        st.success("시스템 라이브러리 설치 완료")
+except Exception as e:
+    st.warning(f"시스템 라이브러리 설치 중 오류 발생: {str(e)}")
 
 # CSS 스타일 적용
 st.markdown("""
