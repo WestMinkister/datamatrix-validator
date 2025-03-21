@@ -4,7 +4,6 @@ import re
 import os
 import tempfile
 import numpy as np
-import cv2
 from PIL import Image
 import time
 import shutil
@@ -18,10 +17,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# 필요한 패키지 확인 및 설치
-import subprocess
-import sys
 
 # CSS 스타일 적용
 st.markdown("""
@@ -57,69 +52,67 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 필요한 라이브러리 확인 및 설치 (첫 실행시에만)
-def install_requirements():
-    requirements = [
-        "pylibdmtx", "opencv-python", "python-pptx", "openpyxl", 
-        "pdf2image", "pypdfium2", "PyPDF2", "Pillow"
-    ]
-    
-    installed_all = True
-    for package in requirements:
-        try:
-            __import__(package.replace("-", "_").split(">=")[0])
-        except ImportError:
-            installed_all = False
-            st.warning(f"{package} 라이브러리를 설치합니다...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-    
-    return installed_all
+# 각 라이브러리 개별 로드 시도
+# OpenCV 로드 시도
+try:
+    import cv2
+    HAVE_CV2 = True
+except ImportError:
+    HAVE_CV2 = False
+    st.warning("OpenCV (cv2) 라이브러리를 불러올 수 없습니다. 이미지 처리 기능이 제한됩니다.")
 
-# 세션 상태에 설치 확인 상태 저장 (무한 루프 방지)
-if 'packages_checked' not in st.session_state:
-    st.session_state['packages_checked'] = False
+# pylibdmtx 로드 시도
+try:
+    from pylibdmtx.pylibdmtx import decode
+    HAVE_PYLIBDMTX = True
+except ImportError:
+    HAVE_PYLIBDMTX = False
+    st.warning("pylibdmtx 라이브러리를 불러올 수 없습니다. 바코드 검출 기능을 사용할 수 없습니다.")
+    
+    # 폴백 함수 정의
+    def decode(image, **kwargs):
+        return []
 
-# 시작 시 한 번만 필요한 라이브러리 설치
-if not st.session_state['packages_checked']:
-    with st.spinner("필요한 라이브러리를 확인 중입니다..."):
-        try:
-            # pylibdmtx가 설치되어 있는지 확인하고 없으면 설치
-            from pylibdmtx.pylibdmtx import decode
-            import pdf2image
-            import pypdfium2 as pdfium
-            from openpyxl import load_workbook
-            from pptx import Presentation
-            from PyPDF2 import PdfReader
-            st.session_state['packages_checked'] = True
-        except ImportError:
-            # 패키지 설치 시도
-            all_installed = install_requirements()
-            if all_installed:
-                st.session_state['packages_checked'] = True
-                st.success("필요한 모든 라이브러리가 설치되었습니다.")
-                # rerun 대신 import 다시 시도
-                try:
-                    from pylibdmtx.pylibdmtx import decode
-                    import pdf2image
-                    import pypdfium2 as pdfium
-                    from openpyxl import load_workbook
-                    from pptx import Presentation
-                    from PyPDF2 import PdfReader
-                except ImportError:
-                    st.error("일부 라이브러리를 불러오는데 문제가 발생했습니다. 앱을 다시 시작해보세요.")
-            else:
-                st.error("일부 라이브러리를 설치하는데 문제가 발생했습니다.")
-else:
-    # 이미 확인된 경우 라이브러리 임포트
-    try:
-        from pylibdmtx.pylibdmtx import decode
-        import pdf2image
-        import pypdfium2 as pdfium
-        from openpyxl import load_workbook
-        from pptx import Presentation
-        from PyPDF2 import PdfReader
-    except ImportError:
-        st.error("일부 필수 라이브러리를 불러오는데 실패했습니다.")
+# pdf2image 로드 시도
+try:
+    import pdf2image
+    HAVE_PDF2IMAGE = True
+except ImportError:
+    HAVE_PDF2IMAGE = False
+    st.warning("pdf2image 라이브러리를 불러올 수 없습니다. PDF 이미지 추출 기능이 제한됩니다.")
+
+# pypdfium2 로드 시도
+try:
+    import pypdfium2 as pdfium
+    HAVE_PDFIUM = True
+except ImportError:
+    HAVE_PDFIUM = False
+    st.warning("pypdfium2 라이브러리를 불러올 수 없습니다. PDF 처리 기능이 제한됩니다.")
+
+# Office 관련 라이브러리 로드 시도
+try:
+    from openpyxl import load_workbook
+    HAVE_OPENPYXL = True
+except ImportError:
+    HAVE_OPENPYXL = False
+    st.warning("openpyxl 라이브러리를 불러올 수 없습니다. Excel 파일 처리 기능을 사용할 수 없습니다.")
+
+try:
+    from pptx import Presentation
+    HAVE_PPTX = True
+except ImportError:
+    HAVE_PPTX = False
+    st.warning("python-pptx 라이브러리를 불러올 수 없습니다. PowerPoint 파일 처리 기능을 사용할 수 없습니다.")
+
+try:
+    from PyPDF2 import PdfReader
+    HAVE_PYPDF2 = True
+except ImportError:
+    HAVE_PYPDF2 = False
+    st.warning("PyPDF2 라이브러리를 불러올 수 없습니다. PDF 텍스트 추출 기능을 사용할 수 없습니다.")
+
+# 필요한 라이브러리 설치 확인 메시지
+st.info("라이브러리 로드가 완료되었습니다. 일부 라이브러리가 로드되지 않은 경우 해당 기능이 제한될 수 있습니다.")
 
 # 필요한 시스템 패키지 확인 (서버에 미리 설치되어 있어야 함)
 def check_system_dependencies():
@@ -148,7 +141,6 @@ def check_system_dependencies():
     except Exception as e:
         st.warning(f"시스템 의존성 확인 중 오류 발생: {str(e)}")
         st.info("이 앱이 정상적으로 작동하려면 libdmtx, libreoffice, poppler-utils가 필요합니다.")
-
 
 # =========================================================
 # 유효성 검증 함수
@@ -534,21 +526,26 @@ def detect_datamatrix(image, progress_callback=None):
 # 파일 처리 함수
 # =========================================================
 
+# 수정된 PDF 처리 함수
 def extract_images_from_pdf(file_content, progress_callback=None):
-    """PDF 파일에서 페이지별 이미지 추출"""
+    """PDF 파일에서 페이지별 이미지 추출 (오류 방지 기능 추가)"""
     images = []
     
-    try:
-        # 임시 파일 생성
-        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as temp_file:
-            temp_file.write(file_content)
-            temp_path = temp_file.name
-        
-        if progress_callback:
-            progress_callback(20)
-            
-        # pypdfium2로 PDF 이미지 추출 (고해상도)
+    # 오류 발생 시 표시할 메시지
+    error_messages = []
+    
+    # PDFIUM으로 시도
+    if HAVE_PDFIUM:
         try:
+            # 임시 파일 생성
+            with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as temp_file:
+                temp_file.write(file_content)
+                temp_path = temp_file.name
+            
+            if progress_callback:
+                progress_callback(20)
+                
+            # pypdfium2로 PDF 이미지 추출 (고해상도)
             pdf = pdfium.PdfDocument(temp_path)
             
             total_pages = len(pdf)
@@ -567,31 +564,60 @@ def extract_images_from_pdf(file_content, progress_callback=None):
                 # 이미지 변환
                 pil_image = bitmap.to_pil()
                 images.append(pil_image)
+                
+            # 임시 파일 삭제
+            os.unlink(temp_path)
+            
+            if images:
+                return images
+            else:
+                error_messages.append("pypdfium2로 이미지 추출 실패")
         except Exception as e:
-            st.warning(f"pypdfium2로 PDF 처리 실패: {str(e)}")
-        
-        # pdf2image 라이브러리를 사용한 대체 방법
-        if not images:
-            st.info("pypdfium2로 이미지 추출 실패, pdf2image 시도 중...")
+            error_messages.append(f"pypdfium2로 PDF 처리 실패: {str(e)}")
+    else:
+        error_messages.append("pypdfium2 라이브러리가 설치되지 않음")
+    
+    # pdf2image로 시도
+    if HAVE_PDF2IMAGE:
+        try:
+            st.info("pdf2image로 이미지 추출 시도 중...")
             
             if progress_callback:
                 progress_callback(50)
                 
-            try:
-                pdf_images = pdf2image.convert_from_path(temp_path, dpi=300)
-                images.extend(pdf_images)
-            except Exception as e2:
-                st.error(f"PDF 파일 처리 실패: {str(e2)}")
-                st.info("PDF 처리를 위해 poppler-utils가 설치되어 있는지 확인하세요.")
-        
-        # 임시 파일 삭제
-        os.unlink(temp_path)
-        
-        if progress_callback:
-            progress_callback(100)
+            # 임시 디렉토리 생성
+            temp_dir = tempfile.mkdtemp()
+            temp_pdf_path = os.path.join(temp_dir, 'temp.pdf')
             
-    except Exception as e:
-        st.error(f"PDF 파일 처리 중 오류 발생: {str(e)}")
+            # 파일 저장
+            with open(temp_pdf_path, 'wb') as f:
+                f.write(file_content)
+            
+            # pdf2image로 PDF에서 이미지 추출
+            pdf_images = pdf2image.convert_from_path(temp_pdf_path, dpi=300)
+            images.extend(pdf_images)
+            
+            # 임시 디렉토리 삭제
+            shutil.rmtree(temp_dir)
+            
+            if progress_callback:
+                progress_callback(100)
+                
+            if images:
+                return images
+            else:
+                error_messages.append("pdf2image로 이미지 추출 실패")
+        except Exception as e:
+            error_messages.append(f"PDF 파일 처리 실패: {str(e)}")
+    else:
+        error_messages.append("pdf2image 라이브러리가 설치되지 않음")
+    
+    # 모든 방법 실패 시
+    for msg in error_messages:
+        st.error(msg)
+    
+    st.error("PDF에서 이미지를 추출할 수 없습니다. 필요한 라이브러리가 설치되어 있는지 확인하세요.")
+    st.info("PDF 처리를 위해 다음 패키지가 필요합니다: pypdfium2, pdf2image, poppler-utils")
     
     return images
 
