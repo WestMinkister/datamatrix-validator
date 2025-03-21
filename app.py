@@ -11,9 +11,51 @@ import shutil
 import base64
 from io import BytesIO
 
+# 페이지 설정을 가장 먼저 호출해야 함
+st.set_page_config(
+    page_title="DataMatrix 바코드 검증 도구",
+    page_icon="🔍",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 # 필요한 패키지 확인 및 설치
 import subprocess
 import sys
+
+# CSS 스타일 적용
+st.markdown("""
+<style>
+    .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+    h1, h2, h3 {
+        margin-bottom: 0.5rem;
+    }
+    .stProgress > div > div > div > div {
+        background-color: #4CAF50;
+    }
+    .success-box {
+        padding: 1rem;
+        border-radius: 0.5rem;
+        background-color: #F0FFF0;
+        border: 1px solid #CCFFCC;
+    }
+    .warning-box {
+        padding: 1rem;
+        border-radius: 0.5rem;
+        background-color: #FFFAF0;
+        border: 1px solid #FAEBD7;
+    }
+    .error-box {
+        padding: 1rem;
+        border-radius: 0.5rem;
+        background-color: #FFF0F0;
+        border: 1px solid #FFCCCC;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # 필요한 라이브러리 확인 및 설치 (첫 실행시에만)
 def install_requirements():
@@ -79,7 +121,6 @@ else:
     except ImportError:
         st.error("일부 필수 라이브러리를 불러오는데 실패했습니다.")
 
-
 # 필요한 시스템 패키지 확인 (서버에 미리 설치되어 있어야 함)
 def check_system_dependencies():
     try:
@@ -107,6 +148,7 @@ def check_system_dependencies():
     except Exception as e:
         st.warning(f"시스템 의존성 확인 중 오류 발생: {str(e)}")
         st.info("이 앱이 정상적으로 작동하려면 libdmtx, libreoffice, poppler-utils가 필요합니다.")
+
 
 # =========================================================
 # 유효성 검증 함수
@@ -831,47 +873,9 @@ def display_format_help():
 # =========================================================
 
 def main():
-    # 앱 설정
-    st.set_page_config(
-        page_title="DataMatrix 바코드 검증 도구",
-        page_icon="🔍",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
-    
-    # CSS 스타일 적용
-    st.markdown("""
-    <style>
-        .main .block-container {
-            padding-top: 2rem;
-            padding-bottom: 2rem;
-        }
-        h1, h2, h3 {
-            margin-bottom: 0.5rem;
-        }
-        .stProgress > div > div > div > div {
-            background-color: #4CAF50;
-        }
-        .success-box {
-            padding: 1rem;
-            border-radius: 0.5rem;
-            background-color: #F0FFF0;
-            border: 1px solid #CCFFCC;
-        }
-        .warning-box {
-            padding: 1rem;
-            border-radius: 0.5rem;
-            background-color: #FFFAF0;
-            border: 1px solid #FAEBD7;
-        }
-        .error-box {
-            padding: 1rem;
-            border-radius: 0.5rem;
-            background-color: #FFF0F0;
-            border: 1px solid #FFCCCC;
-        }
-    </style>
-    """, unsafe_allow_html=True)
+    # 메인 페이지
+    st.title("DataMatrix 바코드 검증 도구 🔍")
+    st.markdown("PDF, PowerPoint, Excel 파일에서 DataMatrix 바코드를 검색하고 검증합니다.")
     
     # 사이드바 설정
     with st.sidebar:
@@ -909,10 +913,6 @@ def main():
         st.markdown("### 개발자 정보")
         st.markdown("버전: 1.0.0")
         st.markdown("업데이트: 2025년 3월 21일")
-        
-    # 메인 페이지
-    st.title("DataMatrix 바코드 검증 도구 🔍")
-    st.markdown("PDF, PowerPoint, Excel 파일에서 DataMatrix 바코드를 검색하고 검증합니다.")
     
     # 시스템 의존성 확인
     if 'system_checked' not in st.session_state:
