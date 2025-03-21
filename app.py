@@ -5,6 +5,7 @@ import io
 import re
 import tempfile
 import sys
+import platform
 import numpy as np
 from PIL import Image
 import time
