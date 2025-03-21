@@ -995,8 +995,8 @@ def main():
             # 텍스트 크기와 마진 조정하여 이미지와 높이 맞추기
             st.markdown("""
             <div style="margin-top: 25px;">
-                <h3 style="margin-bottom: 15px;">이 프로그램은 귀사의 자산이므로<br>취급에 주의하시기 바랍니다.</h3>
-                <p style="font-size: 18px;">무단 배포 및 복제를 금지합니다.</p>
+                <h3 style="margin-bottom: 15px;">이 홈페이지는 현대자동차-기아의 정보자산으로 관련 법령에 의해 보호받습니다.</h3>
+                <p style="font-size: 18px;">무단 배포 및 복제를 금지하니 취급에 주의하시기 바랍니다.</p>
             </div>
             """, unsafe_allow_html=True)
     
