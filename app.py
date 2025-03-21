@@ -77,13 +77,16 @@ try:
     HAVE_PYLIBDMTX = True
 except ImportError:
     HAVE_PYLIBDMTX = False
-    st.warning("pylibdmtx 라이브러리를 불러올 수 없습니다. 바코드 검출 기능을 사용할 수 없습니다.")
-    st.info("pylibdmtx 설치를 위해서는 libdmtx 시스템 라이브러리가 필요합니다.")
+    import platform
+    if platform.system() == "Windows":
+        st.warning("pylibdmtx 라이브러리를 불러올 수 없습니다.")
+        st.info("Windows에서 pylibdmtx 설치하기: pip install pylibdmtx 후 libdmtx.dll 파일을 Python 실행 폴더에 복사하세요.")
+    else:
+        st.warning("pylibdmtx 라이브러리를 불러올 수 없습니다. 바코드 검출 기능을 사용할 수 없습니다.")
+        st.info("pylibdmtx 설치를 위해서는 libdmtx 시스템 라이브러리가 필요합니다.")
     
-    # 폴백 함수 정의 - 더 자세한 구현
+    # 폴백 함수 정의
     def decode(image, **kwargs):
-        st.warning("실제 바코드 검출 기능을 사용할 수 없습니다. 테스트 데이터를 반환합니다.")
-        # 더미 데이터 반환
         return []
 
 # pdf2image 로드 시도
@@ -129,27 +132,50 @@ st.info("라이브러리 로드가 완료되었습니다. 일부 라이브러리
 
 # 필요한 시스템 패키지 확인 (서버에 미리 설치되어 있어야 함)
 def check_system_dependencies():
+    """시스템에 필요한 라이브러리가 설치되어 있는지 확인"""
+    # 운영체제 확인
+    import platform
+    
+    current_os = platform.system()
+    
+    # Windows에서는 다른 검사 방법 사용
+    if current_os == "Windows":
+        # Windows용 검사 코드
+        try:
+            # pylibdmtx가 로드되었는지만 확인
+            if not HAVE_PYLIBDMTX:
+                st.warning("pylibdmtx 라이브러리를 불러올 수 없습니다. Windows용 설치 방법을 확인하세요.")
+                st.info("Windows에 libdmtx를 설치하려면 https://github.com/dmtx/libdmtx/releases 에서 다운로드하세요.")
+            
+            # LibreOffice 확인 (Windows 방식)
+            import os
+            libreoffice_paths = [
+                "C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+                "C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe"
+            ]
+            libreoffice_found = any(os.path.exists(path) for path in libreoffice_paths)
+            
+            if not libreoffice_found:
+                st.warning("LibreOffice가 설치되어 있지 않습니다. Office 파일 변환이 작동하지 않을 수 있습니다.")
+                st.info("LibreOffice를 https://www.libreoffice.org/download/download/ 에서 다운로드하세요.")
+                
+        except Exception as e:
+            st.warning(f"시스템 확인 중 오류 발생: {str(e)}")
+            st.info("일부 기능이 제한될 수 있지만, 앱은 계속 작동합니다.")
+        
+        return
+    
+    # Linux/macOS 검사 코드 (기존 코드)
     try:
         # libdmtx 확인
         result = subprocess.run(["pkg-config", "--exists", "libdmtx"], 
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if result.returncode != 0:
             st.warning("libdmtx가 설치되어 있지 않습니다. 바코드 검출이 작동하지 않을 수 있습니다.")
-            st.info("Ubuntu에서는 'sudo apt-get install libdmtx0a libdmtx-dev'로 설치할 수 있습니다.")
-        
-        # libreoffice 확인
-        result = subprocess.run(["which", "libreoffice"], 
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if result.returncode != 0:
-            st.warning("LibreOffice가 설치되어 있지 않습니다. Office 파일 변환이 작동하지 않을 수 있습니다.")
-            st.info("Ubuntu에서는 'sudo apt-get install libreoffice'로 설치할 수 있습니다.")
-        
-        # poppler-utils 확인
-        result = subprocess.run(["which", "pdfinfo"], 
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if result.returncode != 0:
-            st.warning("poppler-utils가 설치되어 있지 않습니다. PDF 처리가 제한될 수 있습니다.")
-            st.info("Ubuntu에서는 'sudo apt-get install poppler-utils'로 설치할 수 있습니다.")
+            if current_os == "Darwin":  # macOS
+                st.info("macOS에서는 'brew install libdmtx'로 설치할 수 있습니다.")
+            else:  # Linux
+                st.info("Ubuntu에서는 'sudo apt-get install libdmtx0a libdmtx-dev'로 설치할 수 있습니다.")
     
     except Exception as e:
         st.warning(f"시스템 의존성 확인 중 오류 발생: {str(e)}")
@@ -653,11 +679,35 @@ def convert_office_to_pdf(file_content, file_extension, progress_callback=None):
         if progress_callback:
             progress_callback(30)
             
-        # LibreOffice로 PDF 변환
-        cmd = f'libreoffice --headless --convert-to pdf --outdir {temp_dir} {input_path}'
+        # 운영체제 확인
+        import platform
+        
+        # LibreOffice로 PDF 변환 (OS별 명령어 분기)
+        if platform.system() == "Windows":
+            # Windows용 명령어
+            libreoffice_paths = [
+                "C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+                "C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe"
+            ]
+            
+            libreoffice_path = None
+            for path in libreoffice_paths:
+                if os.path.exists(path):
+                    libreoffice_path = f'"{path}"'
+                    break
+                    
+            if not libreoffice_path:
+                st.warning("LibreOffice를 찾을 수 없습니다.")
+                return None
+                
+            cmd = f'{libreoffice_path} --headless --convert-to pdf --outdir "{temp_dir}" "{input_path}"'
+        else:
+            # Linux/macOS용 명령어
+            cmd = f'libreoffice --headless --convert-to pdf --outdir {temp_dir} {input_path}'
+        
         process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         _, stderr = process.communicate()
-        
+                
         if process.returncode != 0:
             st.warning(f"LibreOffice 변환 실패: {stderr.decode('utf-8', errors='ignore')}")
             return None
@@ -920,6 +970,16 @@ def main():
     
     # 사이드바 설정
     with st.sidebar:
+        if platform.system() == "Windows":
+            st.markdown("---")
+            st.markdown("### Windows 환경 설정")
+            st.markdown("""
+            1. Python 환경에 pylibdmtx 설치: `pip install pylibdmtx`
+            2. [libdmtx DLL](https://github.com/dmtx/libdmtx/releases) 다운로드
+            3. libdmtx.dll 파일을 Python 실행 경로 또는 시스템 PATH에 추가
+            4. [LibreOffice](https://www.libreoffice.org/download/download/) 설치
+            """)
+
         st.title("DataMatrix 바코드 검증 도구")
         st.markdown("---")
         
