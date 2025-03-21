@@ -22,24 +22,62 @@ def install_requirements():
         "pdf2image", "pypdfium2", "PyPDF2", "Pillow"
     ]
     
+    installed_all = True
     for package in requirements:
         try:
             __import__(package.replace("-", "_").split(">=")[0])
         except ImportError:
+            installed_all = False
+            st.warning(f"{package} 라이브러리를 설치합니다...")
             subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+    
+    return installed_all
 
-# 시작 시 필요한 라이브러리 설치
-try:
-    from pylibdmtx.pylibdmtx import decode
-    import pdf2image
-    import pypdfium2 as pdfium
-    from openpyxl import load_workbook
-    from pptx import Presentation
-    from PyPDF2 import PdfReader
-except ImportError:
-    with st.spinner("필요한 라이브러리를 설치 중입니다..."):
-        install_requirements()
-    st.rerun()  # experimental_rerun() 대신 rerun() 사용
+# 세션 상태에 설치 확인 상태 저장 (무한 루프 방지)
+if 'packages_checked' not in st.session_state:
+    st.session_state['packages_checked'] = False
+
+# 시작 시 한 번만 필요한 라이브러리 설치
+if not st.session_state['packages_checked']:
+    with st.spinner("필요한 라이브러리를 확인 중입니다..."):
+        try:
+            # pylibdmtx가 설치되어 있는지 확인하고 없으면 설치
+            from pylibdmtx.pylibdmtx import decode
+            import pdf2image
+            import pypdfium2 as pdfium
+            from openpyxl import load_workbook
+            from pptx import Presentation
+            from PyPDF2 import PdfReader
+            st.session_state['packages_checked'] = True
+        except ImportError:
+            # 패키지 설치 시도
+            all_installed = install_requirements()
+            if all_installed:
+                st.session_state['packages_checked'] = True
+                st.success("필요한 모든 라이브러리가 설치되었습니다.")
+                # rerun 대신 import 다시 시도
+                try:
+                    from pylibdmtx.pylibdmtx import decode
+                    import pdf2image
+                    import pypdfium2 as pdfium
+                    from openpyxl import load_workbook
+                    from pptx import Presentation
+                    from PyPDF2 import PdfReader
+                except ImportError:
+                    st.error("일부 라이브러리를 불러오는데 문제가 발생했습니다. 앱을 다시 시작해보세요.")
+            else:
+                st.error("일부 라이브러리를 설치하는데 문제가 발생했습니다.")
+else:
+    # 이미 확인된 경우 라이브러리 임포트
+    try:
+        from pylibdmtx.pylibdmtx import decode
+        import pdf2image
+        import pypdfium2 as pdfium
+        from openpyxl import load_workbook
+        from pptx import Presentation
+        from PyPDF2 import PdfReader
+    except ImportError:
+        st.error("일부 필수 라이브러리를 불러오는데 실패했습니다.")
 
 
 # 필요한 시스템 패키지 확인 (서버에 미리 설치되어 있어야 함)
