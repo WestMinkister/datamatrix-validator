@@ -479,16 +479,6 @@ def enhance_image_for_detection(image):
 
 def detect_datamatrix(image, progress_callback=None):
     """이미지에서 DataMatrix 바코드 검출 (개선 버전)"""
-    if test_mode:
-        # 테스트용 더미 데이터 반환
-        if progress_callback:
-            for i in range(0, 101, 10):
-                progress_callback(i)
-                time.sleep(0.2)
-        return [
-            "CAB1.I21.WLO.T10.N010.D20250317.S001.B000100020003000400050006000700080009001000000000000000000000000000000000000000000000000000000000000000000000000000000000.",
-            "MD213.I21.CSW1.P001."
-        ]
 
     # 원본 이미지 전처리
     processed_images = enhance_image_for_detection(image)
@@ -927,11 +917,6 @@ def main():
     # 메인 페이지
     st.title("DataMatrix 바코드 검증 도구 🔍")
     st.markdown("PDF, PowerPoint, Excel 파일에서 DataMatrix 바코드를 검색하고 검증합니다.")
-
-    # 테스트 모드 추가
-    test_mode = st.sidebar.checkbox("테스트 모드 활성화", value=False, 
-                                   help="시스템 라이브러리가 없어도 더미 데이터로 작동합니다")
-
     
     # 사이드바 설정
     with st.sidebar:
