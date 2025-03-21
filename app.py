@@ -812,11 +812,13 @@ def extract_images_from_office_file(file_content, file_extension, progress_callb
 def display_barcode_result(idx, data, result, matrix_type="44x44"):
     """바코드 검증 결과를 Streamlit UI에 표시"""
     # 바코드 데이터 출력 - 앞부분과 뒷부분을 함께 표시
+    display_data = data
+    """
     if len(data) > 60:
         display_data = f"{data[:30]}...{data[-20:]}"
     else:
         display_data = data
-    
+    """
     st.write(f"**바코드 #{idx+1} 데이터:** {display_data}")
     st.write(f"**{matrix_type} 매트릭스** 형식으로 판단됩니다.")
     
