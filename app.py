@@ -108,19 +108,6 @@ def check_system_dependencies():
         st.warning(f"시스템 의존성 확인 중 오류 발생: {str(e)}")
         st.info("이 앱이 정상적으로 작동하려면 libdmtx, libreoffice, poppler-utils가 필요합니다.")
 
-# 시작 시 필요한 라이브러리 설치
-try:
-    from pylibdmtx.pylibdmtx import decode
-    import pdf2image
-    import pypdfium2 as pdfium
-    from openpyxl import load_workbook
-    from pptx import Presentation
-    from PyPDF2 import PdfReader
-except ImportError:
-    with st.spinner("필요한 라이브러리를 설치 중입니다..."):
-        install_requirements()
-    st.experimental_rerun()
-
 # =========================================================
 # 유효성 검증 함수
 # =========================================================
