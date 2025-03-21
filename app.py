@@ -15,9 +15,6 @@ from io import BytesIO
 import subprocess
 import sys
 
-# 해시 에러 방지를 위해 캐싱 비활성화 설정
-st.set_option('deprecation.showfileUploaderEncoding', False)
-
 # 필요한 라이브러리 확인 및 설치 (첫 실행시에만)
 def install_requirements():
     requirements = [
@@ -30,6 +27,20 @@ def install_requirements():
             __import__(package.replace("-", "_").split(">=")[0])
         except ImportError:
             subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+
+# 시작 시 필요한 라이브러리 설치
+try:
+    from pylibdmtx.pylibdmtx import decode
+    import pdf2image
+    import pypdfium2 as pdfium
+    from openpyxl import load_workbook
+    from pptx import Presentation
+    from PyPDF2 import PdfReader
+except ImportError:
+    with st.spinner("필요한 라이브러리를 설치 중입니다..."):
+        install_requirements()
+    st.rerun()  # experimental_rerun() 대신 rerun() 사용
+
 
 # 필요한 시스템 패키지 확인 (서버에 미리 설치되어 있어야 함)
 def check_system_dependencies():
