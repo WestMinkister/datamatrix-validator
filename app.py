@@ -971,6 +971,26 @@ def main():
     st.title("DataMatrix 바코드 검증 도구 🔍")
     st.markdown("PDF, PowerPoint, Excel 파일에서 DataMatrix 바코드를 검색하고 검증합니다.")
     
+    # 보안 배너 추가 (컨테이너 사용)
+    security_container = st.container()
+    with security_container:
+        cols = st.columns([1, 3])
+        with cols[0]:
+            # 방법 1: 로컬 이미지 파일
+            try:
+                restricted_img = Image.open("restricted.png")
+                st.image(restricted_img, width=100)
+            except:
+                # 이미지가 없는 경우
+                st.markdown("### ⚠️ 사내한 Restricted")
+        
+        with cols[1]:
+            st.markdown("#### 이 프로그램은 귀사의 자산이므로 취급에 주의하시기 바랍니다.")
+            st.markdown("무단 배포 및 복제를 금지합니다.")
+    
+    st.markdown("---")  # 구분선
+    st.markdown("PDF, PowerPoint, Excel 파일에서 DataMatrix 바코드를 검색하고 검증합니다.")
+
     # 사이드바 설정
     with st.sidebar:
         if platform.system() == "Windows":
