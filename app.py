@@ -978,7 +978,7 @@ def main():
         with cols[0]:
             # 방법 1: 로컬 이미지 파일
             try:
-                restricted_img = Image.open("restricted.png")
+                restricted_img = Image.open("./restricted.png")
                 st.image(restricted_img, width=100)
             except:
                 # 이미지가 없는 경우
