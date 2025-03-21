@@ -15,6 +15,7 @@ from pyzbar.pyzbar import decode
 # 나머지 import 문...
 import pdf2image
 import pymupdf as fitz
+import PIL.Image
 
 # Streamlit 페이지 설정
 st.set_page_config(page_title="데이터매트릭스 검증기", layout="wide")
@@ -562,7 +563,7 @@ def extract_images_from_file(uploaded_file):
     return {}
 
 
-@st.cache_data
+@st.cache_data(hash_funcs={PIL.Image.Image: lambda _: None})
 # 이미지 전처리 함수 개선
 def enhance_image_for_detection(image):
     """이미지 전처리를 통해 DataMatrix 인식률 향상 (개선 버전)"""
