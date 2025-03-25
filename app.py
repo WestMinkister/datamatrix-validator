@@ -1175,21 +1175,19 @@ def main():
             st.markdown("44x44 매트릭스의 B 식별자 뒤에 오는 값(4자리 세트)의 허용 범위를 설정합니다.")
             
             # 체크박스 상태 관리 개선
-            if "b_range_check_key" not in st.session_state:
+            def update_b_range_check():
+                st.session_state.b_range_check = st.session_state.b_range_check_key
+                st.sidebar.info(f"디버그: B 식별자 범위 체크박스 변경됨: {st.session_state.b_range_check}")
+            
+            # 'b_range_check_key'가 세션 상태에 없을 때만 초기화
+            if 'b_range_check_key' not in st.session_state:
                 st.session_state.b_range_check_key = st.session_state.b_range_check
                 
-            if st.checkbox(
+            st.checkbox(
                 "B 식별자 범위 검사 활성화",
-                value=st.session_state.b_range_check,
-                key="b_range_check_key"
-            ):
-                # 체크박스가 체크되면 True로 설정
-                st.session_state.b_range_check = True
-                st.sidebar.info(f"디버그: B 식별자 범위 체크박스 설정됨: {st.session_state.b_range_check}")
-            else:
-                # 체크박스가 해제되면 False로 설정
-                st.session_state.b_range_check = False
-                st.sidebar.info(f"디버그: B 식별자 범위 체크박스 해제됨: {st.session_state.b_range_check}")
+                key="b_range_check_key",
+                on_change=update_b_range_check
+            )
             
             col1, col2 = st.columns(2)
             with col1:
