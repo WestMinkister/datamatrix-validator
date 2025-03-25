@@ -1,4 +1,49 @@
-import streamlit as st
+# 설정 파일 경로
+CONFIG_FILE = "datamatrix_config.json"
+
+def load_config():
+    """설정 파일에서 구성 불러오기"""
+    default_config = {
+        "b_range_check": False,
+        "b_min_value": 80,
+        "b_max_value": 250,
+        "i_n_check": True,
+        "i_to_n_mapping": {str(i): 10 for i in range(10, 60)}
+    }
+    
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r') as f:
+                return json.load(f)
+        else:
+            # 설정 파일이 없으면 기본 설정 저장
+            with open(CONFIG_FILE, 'w') as f:
+                json.dump(default_config, f, indent=2)
+            return default_config
+    except Exception as e:
+        st.error(f"설정 파일 로드 중 오류: {str(e)}")
+        return default_config
+
+def save_config(config):
+    """설정을 파일에 저장"""
+    try:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=2)
+        return True
+    except Exception as e:
+        st.error(f"설정 파일 저장 중 오류: {str(e)}")
+        return False
+
+def save_current_config():
+    """현재 세션에서 설정 값을 파일로 저장"""
+    config = {
+        "b_range_check": st.session_state.b_range_check,
+        "b_min_value": st.session_state.b_min_value,
+        "b_max_value": st.session_state.b_max_value,
+        "i_n_check": st.session_state.i_n_check,
+        "i_to_n_mapping": st.session_state.i_to_n_mapping
+    }
+    return save_config(config)import streamlit as st
 import subprocess
 import os
 import io
@@ -12,6 +57,54 @@ import time
 import shutil
 import base64
 from io import BytesIO
+import json
+
+# 설정 파일 경로
+CONFIG_FILE = "datamatrix_config.json"
+
+def load_config():
+    """설정 파일에서 구성 불러오기"""
+    default_config = {
+        "b_range_check": False,
+        "b_min_value": 80,
+        "b_max_value": 250,
+        "i_n_check": True,
+        "i_to_n_mapping": {str(i): 10 for i in range(10, 60)}
+    }
+    
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r') as f:
+                return json.load(f)
+        else:
+            # 설정 파일이 없으면 기본 설정 저장
+            with open(CONFIG_FILE, 'w') as f:
+                json.dump(default_config, f, indent=2)
+            return default_config
+    except Exception as e:
+        st.error(f"설정 파일 로드 중 오류: {str(e)}")
+        return default_config
+
+def save_config(config):
+    """설정을 파일에 저장"""
+    try:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=2)
+        return True
+    except Exception as e:
+        st.error(f"설정 파일 저장 중 오류: {str(e)}")
+        return False
+
+def save_current_config():
+    """현재 세션에서 설정 값을 파일로 저장"""
+    config = {
+        "b_range_check": st.session_state.b_range_check,
+        "b_min_value": st.session_state.b_min_value,
+        "b_max_value": st.session_state.b_max_value,
+        "i_n_check": st.session_state.i_n_check,
+        "i_to_n_mapping": st.session_state.i_to_n_mapping
+    }
+    return save_config(config)
 
 # 페이지 설정을 가장 먼저 호출해야 함
 st.set_page_config(
@@ -1015,24 +1108,24 @@ def display_format_help():
 # =========================================================
 
 def main():
+    # 설정 파일에서 구성 로드
+    config = load_config()
+    
     # 세션 상태 초기화
     if 'admin_mode' not in st.session_state:
         st.session_state.admin_mode = False
     if 'admin_password' not in st.session_state:
         st.session_state.admin_password = "datamatrix_admin"
     if 'b_range_check' not in st.session_state:
-        st.session_state.b_range_check = False
+        st.session_state.b_range_check = config["b_range_check"]
     if 'b_min_value' not in st.session_state:
-        st.session_state.b_min_value = 80
+        st.session_state.b_min_value = config["b_min_value"]
     if 'b_max_value' not in st.session_state:
-        st.session_state.b_max_value = 250
+        st.session_state.b_max_value = config["b_max_value"]
     if 'i_n_check' not in st.session_state:
-        st.session_state.i_n_check = True
+        st.session_state.i_n_check = config["i_n_check"]
     if 'i_to_n_mapping' not in st.session_state:
-        st.session_state.i_to_n_mapping = {}
-        # 기본값으로 I10~I59까지 각각 N 최대값 10으로 설정
-        for i in range(10, 60):
-            st.session_state.i_to_n_mapping[str(i)] = 10
+        st.session_state.i_to_n_mapping = config["i_to_n_mapping"]
 
     # 메인 페이지
     st.title("DataMatrix 바코드 검증 도구 🔍")
@@ -1097,13 +1190,29 @@ def main():
             st.markdown("#### B 식별자 값 범위 설정")
             st.markdown("44x44 매트릭스의 B 식별자 뒤에 오는 값(4자리 세트)의 허용 범위를 설정합니다.")
             
-            st.session_state.b_range_check = st.checkbox("B 식별자 범위 검사 활성화", value=st.session_state.b_range_check)
+            st.session_state.b_range_check = st.checkbox(
+                "B 식별자 범위 검사 활성화", 
+                value=st.session_state.b_range_check, 
+                on_change=save_current_config
+            )
             
             col1, col2 = st.columns(2)
             with col1:
-                st.session_state.b_min_value = st.number_input("최소값", min_value=0, max_value=9999, value=st.session_state.b_min_value)
+                st.session_state.b_min_value = st.number_input(
+                    "최소값", 
+                    min_value=0, 
+                    max_value=9999, 
+                    value=st.session_state.b_min_value,
+                    on_change=save_current_config
+                )
             with col2:
-                st.session_state.b_max_value = st.number_input("최대값", min_value=0, max_value=9999, value=st.session_state.b_max_value)
+                st.session_state.b_max_value = st.number_input(
+                    "최대값", 
+                    min_value=0, 
+                    max_value=9999, 
+                    value=st.session_state.b_max_value,
+                    on_change=save_current_config
+                )
             
             if st.session_state.b_range_check:
                 st.info(f"B 식별자 값이 {st.session_state.b_min_value}~{st.session_state.b_max_value} 범위 내에 있는지 검사합니다.")
@@ -1112,7 +1221,11 @@ def main():
             st.markdown("#### I 식별자에 따른 N 최대값 설정")
             st.markdown("I 식별자 값에 따라 N 식별자가 가질 수 있는 최대값을 설정합니다.")
             
-            st.session_state.i_n_check = st.checkbox("I-N 관계 검사 활성화", value=st.session_state.i_n_check)
+            st.session_state.i_n_check = st.checkbox(
+                "I-N 관계 검사 활성화", 
+                value=st.session_state.i_n_check,
+                on_change=save_current_config
+            )
             
             if st.session_state.i_n_check:
                 st.info("각 I 값에 대한 N 최대값을 설정합니다.")
@@ -1131,7 +1244,8 @@ def main():
                                 min_value=1,
                                 max_value=999,
                                 value=st.session_state.i_to_n_mapping.get(i_val, 10),
-                                key=f"i_val_{i_val}"
+                                key=f"i_val_{i_val}",
+                                on_change=save_current_config
                             )
             st.markdown("### Windows 환경 설정")
             st.markdown("""
