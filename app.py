@@ -81,53 +81,6 @@ def save_current_config():
     st.sidebar.info(f"디버그: 설정 저장 결과: {'성공' if result else '실패'}")
     return result
 
-# 이미 상단에서 import했으므로 제거
-# 설정 파일 경로도 상단에서 정의했으므로 중복 정의 제거
-
-def load_config():
-    """설정 파일에서 구성 불러오기"""
-    default_config = {
-        "b_range_check": False,
-        "b_min_value": 80,
-        "b_max_value": 250,
-        "i_n_check": True,
-        "i_to_n_mapping": {str(i): 10 for i in range(10, 60)}
-    }
-    
-    try:
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, 'r') as f:
-                return json.load(f)
-        else:
-            # 설정 파일이 없으면 기본 설정 저장
-            with open(CONFIG_FILE, 'w') as f:
-                json.dump(default_config, f, indent=2)
-            return default_config
-    except Exception as e:
-        st.error(f"설정 파일 로드 중 오류: {str(e)}")
-        return default_config
-
-def save_config(config):
-    """설정을 파일에 저장"""
-    try:
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump(config, f, indent=2)
-        return True
-    except Exception as e:
-        st.error(f"설정 파일 저장 중 오류: {str(e)}")
-        return False
-
-def save_current_config():
-    """현재 세션에서 설정 값을 파일로 저장"""
-    config = {
-        "b_range_check": st.session_state.b_range_check,
-        "b_min_value": st.session_state.b_min_value,
-        "b_max_value": st.session_state.b_max_value,
-        "i_n_check": st.session_state.i_n_check,
-        "i_to_n_mapping": st.session_state.i_to_n_mapping
-    }
-    return save_config(config)
-
 # 페이지 설정을 가장 먼저 호출해야 함
 st.set_page_config(
     page_title="DataMatrix 바코드 검증 도구",
@@ -459,6 +412,7 @@ def validate_44x44_matrix(data, b_range_check=False, b_min_value=0, b_max_value=
                 # 숫자 하나를 건너뛬어도 경고 표시
                 elif int(B_set) - int(prev_set) > 1:
                     result["warnings"].append(f"B 식별자: 숫자 세트 간에 순차가 건너뛬어졌습니다 ({prev_set} -> {B_set}, 누락 값: {int(B_set) - int(prev_set) - 1}개)")
+            prev_set = B_set
     
     result["valid"] = len(result["errors"]) == 0
     result["has_warnings"] = len(result["warnings"]) > 0
@@ -1205,6 +1159,11 @@ def main():
                     st.error("비밀번호가 올바르지 않습니다.")
         else:
             if st.button("관리자 모드 종료"):
+                # 현재 설정 저장
+                save_result = save_current_config()
+                if save_result:
+                    st.success("설정이 저장되었습니다!")
+                
                 st.session_state.admin_mode = False
                 st.experimental_rerun()
             
@@ -1215,26 +1174,32 @@ def main():
             st.markdown("#### B 식별자 값 범위 설정")
             st.markdown("44x44 매트릭스의 B 식별자 뒤에 오는 값(4자리 세트)의 허용 범위를 설정합니다.")
             
-            # 체크박스 상태 변경 시 호출될 콜백 함수
-            def on_b_range_check_change():
-                st.sidebar.info(f"디버그: B 식별자 범위 체크박스 상태 변경: {st.session_state.b_range_check}")
-                save_current_config()
+            # 체크박스 상태 관리 개선
+            if "b_range_check_key" not in st.session_state:
+                st.session_state.b_range_check_key = st.session_state.b_range_check
                 
-            st.session_state.b_range_check = st.checkbox(
+            if st.checkbox(
                 "B 식별자 범위 검사 활성화",
                 value=st.session_state.b_range_check,
-                on_change=on_b_range_check_change,
                 key="b_range_check_key"
-            )
+            ):
+                # 체크박스가 체크되면 True로 설정
+                st.session_state.b_range_check = True
+                st.sidebar.info(f"디버그: B 식별자 범위 체크박스 설정됨: {st.session_state.b_range_check}")
+            else:
+                # 체크박스가 해제되면 False로 설정
+                st.session_state.b_range_check = False
+                st.sidebar.info(f"디버그: B 식별자 범위 체크박스 해제됨: {st.session_state.b_range_check}")
             
             col1, col2 = st.columns(2)
             with col1:
+                # 내 중요한 설정 변경만 하면 on_change를 사용하는 것이 더 좋습니다.
                 st.session_state.b_min_value = st.number_input(
                     "최소값",
                     min_value=0,
                     max_value=9999,
                     value=st.session_state.b_min_value,
-                    on_change=save_current_config
+                    key="b_min_value_key"
                 )
             with col2:
                 st.session_state.b_max_value = st.number_input(
@@ -1242,21 +1207,32 @@ def main():
                     min_value=0,
                     max_value=9999,
                     value=st.session_state.b_max_value,
-                    on_change=save_current_config
+                    key="b_max_value_key"
                 )
             
             if st.session_state.b_range_check:
                 st.info(f"B 식별자 값이 {st.session_state.b_min_value}~{st.session_state.b_max_value} 범위 내에 있는지 검사합니다.")
-        
+            
             # I-N 관계 검증 설정 UI
             st.markdown("#### I 식별자에 따른 N 최대값 설정")
             st.markdown("I 식별자 값에 따라 N 식별자가 가질 수 있는 최대값을 설정합니다.")
             
-            st.session_state.i_n_check = st.checkbox(
+            # 체크박스 상태 관리 개선
+            if "i_n_check_key" not in st.session_state:
+                st.session_state.i_n_check_key = st.session_state.i_n_check
+                
+            if st.checkbox(
                 "I-N 관계 검사 활성화",
                 value=st.session_state.i_n_check,
-                on_change=save_current_config
-            )
+                key="i_n_check_key"
+            ):
+                # 체크박스가 체크되면 True로 설정
+                st.session_state.i_n_check = True
+                st.sidebar.info(f"디버그: I-N 관계 검사 체크박스 설정됨: {st.session_state.i_n_check}")
+            else:
+                # 체크박스가 해제되면 False로 설정
+                st.session_state.i_n_check = False
+                st.sidebar.info(f"디버그: I-N 관계 검사 체크박스 해제됨: {st.session_state.i_n_check}")
             
             if st.session_state.i_n_check:
                 st.info("각 I 값에 대한 N 최대값을 설정합니다.")
@@ -1275,9 +1251,19 @@ def main():
                                 min_value=1,
                                 max_value=999,
                                 value=st.session_state.i_to_n_mapping.get(i_val, 10),
-                                key=f"i_val_{i_val}",
-                                on_change=save_current_config
+                                key=f"i_val_{i_val}_key"
                             )
+            
+            # 설정 저장 버튼 추가
+            save_settings_col1, _ = st.columns([1, 3])
+            with save_settings_col1:
+                if st.button("설정 저장", key="save_settings_button"):
+                    save_result = save_current_config()
+                    if save_result:
+                        st.success("설정이 성공적으로 저장되었습니다!")
+                    else:
+                        st.error("설정 저장 중 오류가 발생했습니다.")
+                        
             st.markdown("### Windows 환경 설정")
             st.markdown("""
             1. Python 환경에 pylibdmtx 설치: `pip install pylibdmtx`
