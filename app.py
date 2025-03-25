@@ -1,5 +1,7 @@
-# 설정 파일 경로
-CONFIG_FILE = "datamatrix_config.json"
+# 설정 파일 경로 (절대 경로 사용)
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "datamatrix_config.json")
+# 디버그: 설정 파일 경로 정의
+print(f"설정 파일 경로: {CONFIG_FILE}")
 
 def load_config():
     """설정 파일에서 구성 불러오기"""
@@ -27,15 +29,28 @@ def load_config():
 def save_config(config):
     """설정을 파일에 저장"""
     try:
+        # 디버그: 저장 경로 출력
+        abs_path = os.path.abspath(CONFIG_FILE)
+        st.sidebar.info(f"디버그: 설정 저장 시도 - 파일 경로: {abs_path}")
+        st.sidebar.info(f"디버그: 저장할 설정 데이터: {config}")
+        
         with open(CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=2)
+        
+        # 디버그: 저장 성공 메시지
+        st.sidebar.success(f"디버그: 설정이 성공적으로 저장되었습니다 ({time.strftime('%H:%M:%S')})")
         return True
     except Exception as e:
-        st.error(f"설정 파일 저장 중 오류: {str(e)}")
+        # 자세한 에러 메시지 표시
+        st.sidebar.error(f"디버그: 설정 파일 저장 중 오류: {str(e)}")
         return False
 
 def save_current_config():
     """현재 세션에서 설정 값을 파일로 저장"""
+    # 디버그: 함수 호출 및 세션 상태 기록
+    st.sidebar.info(f"디버그: save_current_config 호출됨 ({time.strftime('%H:%M:%S')})")
+    st.sidebar.info(f"디버그: b_range_check 값: {st.session_state.b_range_check}")
+    
     config = {
         "b_range_check": st.session_state.b_range_check,
         "b_min_value": st.session_state.b_min_value,
@@ -43,7 +58,11 @@ def save_current_config():
         "i_n_check": st.session_state.i_n_check,
         "i_to_n_mapping": st.session_state.i_to_n_mapping
     }
-    return save_config(config)
+    
+    result = save_config(config)
+    # 디버그: 저장 결과 기록
+    st.sidebar.info(f"디버그: 설정 저장 결과: {'성공' if result else '실패'}")
+    return result
 
 import streamlit as st
 import subprocess
@@ -1113,6 +1132,9 @@ def main():
     # 설정 파일에서 구성 로드
     config = load_config()
     
+    # 디버그: 로드된 설정 출력
+    st.sidebar.info(f"디버그: 로드된 설정: {config}")
+    
     # 세션 상태 초기화
     if 'admin_mode' not in st.session_state:
         st.session_state.admin_mode = False
@@ -1192,10 +1214,16 @@ def main():
             st.markdown("#### B 식별자 값 범위 설정")
             st.markdown("44x44 매트릭스의 B 식별자 뒤에 오는 값(4자리 세트)의 허용 범위를 설정합니다.")
             
+            # 체크박스 상태 변경 시 호출될 콜백 함수
+            def on_b_range_check_change():
+                st.sidebar.info(f"디버그: B 식별자 범위 체크박스 상태 변경: {st.session_state.b_range_check}")
+                save_current_config()
+                
             st.session_state.b_range_check = st.checkbox(
                 "B 식별자 범위 검사 활성화",
                 value=st.session_state.b_range_check,
-                on_change=save_current_config
+                on_change=on_b_range_check_change,
+                key="b_range_check_key"
             )
             
             col1, col2 = st.columns(2)
