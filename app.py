@@ -1,3 +1,20 @@
+# import 문을 먼저 선언
+import os
+import streamlit as st
+import subprocess
+import io
+import re
+import tempfile
+import sys
+import platform
+import numpy as np
+from PIL import Image
+import time
+import shutil
+import base64
+from io import BytesIO
+import json
+
 # 설정 파일 경로 (절대 경로 사용)
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "datamatrix_config.json")
 # 디버그: 설정 파일 경로 정의
@@ -64,24 +81,8 @@ def save_current_config():
     st.sidebar.info(f"디버그: 설정 저장 결과: {'성공' if result else '실패'}")
     return result
 
-import streamlit as st
-import subprocess
-import os
-import io
-import re
-import tempfile
-import sys
-import platform
-import numpy as np
-from PIL import Image
-import time
-import shutil
-import base64
-from io import BytesIO
-import json
-
-# 설정 파일 경로
-CONFIG_FILE = "datamatrix_config.json"
+# 이미 상단에서 import했으므로 제거
+# 설정 파일 경로도 상단에서 정의했으므로 중복 정의 제거
 
 def load_config():
     """설정 파일에서 구성 불러오기"""
