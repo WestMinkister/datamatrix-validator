@@ -307,13 +307,12 @@ def validate_44x44_matrix(data, b_range_check=False, b_min_value=0, b_max_value=
             i_val_int = int(I_val)
             current_n_value = int(N_val)
             
-            # I 값에 해당하는 범위 찾기
-            for i_range, max_n in i_to_n_mapping.items():
-                range_start, range_end = map(int, i_range.split('-'))
-                if range_start <= i_val_int <= range_end:
-                    if current_n_value > max_n:
-                        result["errors"].append(f"N 식별자: I{I_val}에 대한 N 값이 최대 허용치({max_n})를 초과했습니다 (현재 값: {current_n_value})")
-                    break
+            # I 값에 해당하는 최대 N 값 찾기
+            i_val_str = str(i_val_int)
+            if i_val_str in i_to_n_mapping:
+                max_n = i_to_n_mapping[i_val_str]
+                if current_n_value > max_n:
+                    result["errors"].append(f"N 식별자: I{I_val}에 대한 N 값이 최대 허용치({max_n})를 초과했습니다 (현재 값: {current_n_value})")
         except (ValueError, TypeError):
             # I 값이나 N 값이 정수로 변환할 수 없는 경우
             pass
@@ -328,7 +327,7 @@ def validate_44x44_matrix(data, b_range_check=False, b_min_value=0, b_max_value=
                     out_of_range_sets.append(f"{B_set} ({b_val})")
         
         if out_of_range_sets:
-            error_msg = f"B 식별자: 다음 값들이 지정된 범위({b_min_value}~{b_max_value})를 베어납니다: {', '.join(out_of_range_sets)}"
+            error_msg = f"B 식별자: 다음 값들이 지정된 범위({b_min_value}~{b_max_value})를 벗어납니다: {', '.join(out_of_range_sets)}"
             result["errors"].append(error_msg)
     
     # B: 숫자 세트가 오름차순인지 및 큰 점프가 있는지 확인
@@ -342,7 +341,9 @@ def validate_44x44_matrix(data, b_range_check=False, b_min_value=0, b_max_value=
                 # 큰 점프 확인 (100 초과)
                 elif int(B_set) - int(prev_set) > 100:
                     result["warnings"].append(f"B 식별자: 숫자 세트 간에 큰 점프가 있습니다 ({prev_set} -> {B_set}, 차이: {int(B_set) - int(prev_set)})")
-            prev_set = B_set
+                # 숫자 하나를 건너뛬어도 경고 표시
+                elif int(B_set) - int(prev_set) > 1:
+                    result["warnings"].append(f"B 식별자: 숫자 세트 간에 순차가 건너뛬어졌습니다 ({prev_set} -> {B_set}, 누락 값: {int(B_set) - int(prev_set) - 1}개)")
     
     result["valid"] = len(result["errors"]) == 0
     result["has_warnings"] = len(result["warnings"]) > 0
@@ -1015,6 +1016,10 @@ def display_format_help():
 
 def main():
     # 세션 상태 초기화
+    if 'admin_mode' not in st.session_state:
+        st.session_state.admin_mode = False
+    if 'admin_password' not in st.session_state:
+        st.session_state.admin_password = "datamatrix_admin"
     if 'b_range_check' not in st.session_state:
         st.session_state.b_range_check = False
     if 'b_min_value' not in st.session_state:
@@ -1024,13 +1029,10 @@ def main():
     if 'i_n_check' not in st.session_state:
         st.session_state.i_n_check = True
     if 'i_to_n_mapping' not in st.session_state:
-        st.session_state.i_to_n_mapping = {
-            "10-19": 10,
-            "20-29": 10,
-            "30-39": 10,
-            "40-49": 10,
-            "50-59": 10
-        }
+        st.session_state.i_to_n_mapping = {}
+        # 기본값으로 I10~I59까지 각각 N 최대값 10으로 설정
+        for i in range(10, 60):
+            st.session_state.i_to_n_mapping[str(i)] = 10
 
     # 메인 페이지
     st.title("DataMatrix 바코드 검증 도구 🔍")
@@ -1072,41 +1074,65 @@ def main():
     with st.sidebar:
         if platform.system() == "Windows":
             st.markdown("---")
-        st.markdown("### 매트릭스 검증 설정")
+        st.markdown("### 관리자 설정")
         
-        # B 식별자 범위 설정 UI
-        st.markdown("#### B 식별자 값 범위 설정")
-        st.markdown("44x44 매트릭스의 B 식별자 뒤에 오는 값(4자리 세트)의 허용 범위를 설정합니다.")
-        
-        st.session_state.b_range_check = st.checkbox("B 식별자 범위 검사 활성화", value=st.session_state.b_range_check)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.session_state.b_min_value = st.number_input("최소값", min_value=0, max_value=9999, value=st.session_state.b_min_value)
-        with col2:
-            st.session_state.b_max_value = st.number_input("최대값", min_value=0, max_value=9999, value=st.session_state.b_max_value)
-        
-        if st.session_state.b_range_check:
-            st.info(f"B 식별자 값이 {st.session_state.b_min_value}~{st.session_state.b_max_value} 범위 내에 있는지 검사합니다.")
-        
-        st.markdown("---")
-        st.markdown("### I-N 관계 검증 설정")
-        st.markdown("I 식별자 값 범위에 따라 N 식별자가 가질 수 있는 최대값을 설정합니다.")
-        
-        st.session_state.i_n_check = st.checkbox("I-N 관계 검사 활성화", value=st.session_state.i_n_check)
-        
-        if st.session_state.i_n_check:
-            st.info("다음 I 값 범위에 대한 N 최대값을 설정합니다.")
+        # 관리자 모드 로그인 UI
+        if not st.session_state.admin_mode:
+            admin_password = st.text_input("관리자 비밀번호", type="password")
+            if st.button("관리자 모드 접속"):
+                if admin_password == st.session_state.admin_password:
+                    st.session_state.admin_mode = True
+                    st.experimental_rerun()
+                else:
+                    st.error("비밀번호가 올바르지 않습니다.")
+        else:
+            if st.button("관리자 모드 종료"):
+                st.session_state.admin_mode = False
+                st.experimental_rerun()
             
-            ranges = ["10-19", "20-29", "30-39", "40-49", "50-59"]
-            for i_range in ranges:
-                st.session_state.i_to_n_mapping[i_range] = st.number_input(
-                    f"I{i_range} 범위의 N 최대값",
-                    min_value=1,
-                    max_value=999,
-                    value=st.session_state.i_to_n_mapping.get(i_range, 10),
-                    key=f"i_range_{i_range}"
-                )
+            st.success("관리자 모드로 로그인했습니다.")
+            st.markdown("### 매트릭스 검증 설정 (관리자 전용)")
+        
+            # B 식별자 범위 설정 UI
+            st.markdown("#### B 식별자 값 범위 설정")
+            st.markdown("44x44 매트릭스의 B 식별자 뒤에 오는 값(4자리 세트)의 허용 범위를 설정합니다.")
+            
+            st.session_state.b_range_check = st.checkbox("B 식별자 범위 검사 활성화", value=st.session_state.b_range_check)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.session_state.b_min_value = st.number_input("최소값", min_value=0, max_value=9999, value=st.session_state.b_min_value)
+            with col2:
+                st.session_state.b_max_value = st.number_input("최대값", min_value=0, max_value=9999, value=st.session_state.b_max_value)
+            
+            if st.session_state.b_range_check:
+                st.info(f"B 식별자 값이 {st.session_state.b_min_value}~{st.session_state.b_max_value} 범위 내에 있는지 검사합니다.")
+        
+            # I-N 관계 검증 설정 UI
+            st.markdown("#### I 식별자에 따른 N 최대값 설정")
+            st.markdown("I 식별자 값에 따라 N 식별자가 가질 수 있는 최대값을 설정합니다.")
+            
+            st.session_state.i_n_check = st.checkbox("I-N 관계 검사 활성화", value=st.session_state.i_n_check)
+            
+            if st.session_state.i_n_check:
+                st.info("각 I 값에 대한 N 최대값을 설정합니다.")
+                
+                # I10~I59 값을 5개씩 묶어서 표시
+                ranges = [(10, 19), (20, 29), (30, 39), (40, 49), (50, 59)]
+                
+                for start, end in ranges:
+                    st.markdown(f"##### I{start} ~ I{end}")
+                    cols = st.columns(5)
+                    for i, val in enumerate(range(start, end+1)):
+                        i_val = str(val)
+                        with cols[i % 5]:
+                            st.session_state.i_to_n_mapping[i_val] = st.number_input(
+                                f"I{i_val}",
+                                min_value=1,
+                                max_value=999,
+                                value=st.session_state.i_to_n_mapping.get(i_val, 10),
+                                key=f"i_val_{i_val}"
+                            )
             st.markdown("### Windows 환경 설정")
             st.markdown("""
             1. Python 환경에 pylibdmtx 설치: `pip install pylibdmtx`
