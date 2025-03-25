@@ -186,9 +186,9 @@ def check_system_dependencies():
 # 유효성 검증 함수
 # =========================================================
 
-def validate_44x44_matrix(data):
+def validate_44x44_matrix(data, b_range_check=False, b_min_value=0, b_max_value=9999, i_n_check=False, i_to_n_mapping=None):
     """44x44 매트릭스 데이터 검증 함수"""
-    result = {"valid": False, "errors": [], "data": {}, "pattern_match": False}
+    result = {"valid": False, "errors": [], "warnings": [], "data": {}, "pattern_match": False}
     
     # 잘못된 구분자(,) 사용 확인
     if re.search(r'C[A-Za-z0-9]{3},', data) or re.search(r'I\d{2},', data) or re.search(r'W(?:LO|SE),', data):
@@ -301,15 +301,51 @@ def validate_44x44_matrix(data):
     if int(N_val) != non_zero_sets_count:
         result["errors"].append(f"N 식별자: 값 {N_val}이 B 식별자의 비어있지 않은 세트 수 {non_zero_sets_count}와 일치하지 않습니다")
     
-    # B: 숫자 세트가 오름차순인지 확인
+    # I 값에 따른 N 최대값 검증
+    if i_n_check and i_to_n_mapping and I_val:
+        try:
+            i_val_int = int(I_val)
+            current_n_value = int(N_val)
+            
+            # I 값에 해당하는 범위 찾기
+            for i_range, max_n in i_to_n_mapping.items():
+                range_start, range_end = map(int, i_range.split('-'))
+                if range_start <= i_val_int <= range_end:
+                    if current_n_value > max_n:
+                        result["errors"].append(f"N 식별자: I{I_val}에 대한 N 값이 최대 허용치({max_n})를 초과했습니다 (현재 값: {current_n_value})")
+                    break
+        except (ValueError, TypeError):
+            # I 값이나 N 값이 정수로 변환할 수 없는 경우
+            pass
+    
+    # B 값 범위 검사 (활성화된 경우)
+    if b_range_check:
+        out_of_range_sets = []
+        for B_set in B_sets:
+            if B_set != '0000':
+                b_val = int(B_set)
+                if b_val < b_min_value or b_val > b_max_value:
+                    out_of_range_sets.append(f"{B_set} ({b_val})")
+        
+        if out_of_range_sets:
+            error_msg = f"B 식별자: 다음 값들이 지정된 범위({b_min_value}~{b_max_value})를 베어납니다: {', '.join(out_of_range_sets)}"
+            result["errors"].append(error_msg)
+    
+    # B: 숫자 세트가 오름차순인지 및 큰 점프가 있는지 확인
     prev_set = None
     for B_set in B_sets:
         if B_set != '0000':
-            if prev_set and int(B_set) <= int(prev_set):
-                result["errors"].append(f"B 식별자: 숫자 세트가 오름차순이 아닙니다 ({prev_set} -> {B_set})")
+            if prev_set:
+                # 오름차순 확인
+                if int(B_set) <= int(prev_set):
+                    result["errors"].append(f"B 식별자: 숫자 세트가 오름차순이 아닙니다 ({prev_set} -> {B_set})")
+                # 큰 점프 확인 (100 초과)
+                elif int(B_set) - int(prev_set) > 100:
+                    result["warnings"].append(f"B 식별자: 숫자 세트 간에 큰 점프가 있습니다 ({prev_set} -> {B_set}, 차이: {int(B_set) - int(prev_set)})")
             prev_set = B_set
     
     result["valid"] = len(result["errors"]) == 0
+    result["has_warnings"] = len(result["warnings"]) > 0
     
     return result
 
@@ -823,7 +859,10 @@ def display_barcode_result(idx, data, result, matrix_type="44x44"):
     st.write(f"**{matrix_type} 매트릭스** 형식으로 판단됩니다.")
     
     if result["valid"]:
-        st.success("✅ 매트릭스 형식이 올바릅니다 (전체 규격 검증 완료)")
+        if "has_warnings" in result and result["has_warnings"]:
+            st.warning("⚠️ 매트릭스 형식은 올바르지만 확인이 필요합니다 (확인 필요 항목 발견)")
+        else:
+            st.success("✅ 매트릭스 형식이 올바릅니다 (전체 규격 검증 완료)")
         
         if matrix_type == "44x44":
             # 44x44 매트릭스 결과 출력
@@ -890,7 +929,12 @@ def display_summary_results(page_results):
         
         # 규격 검증 상태
         if result["44x44_found"] and result["44x44_valid"] and result["18x18_found"] and result["18x18_valid"]:
-            validation = "✅ 통과"
+            if result["has_duplicate_44x44"]:
+                validation = "❌ 실패 (44x44 중복)"
+            elif result["has_warnings"]:
+                validation = "⚠️ 확인 필요"
+            else:
+                validation = "✅ 통과"
         elif (not result["44x44_found"]) or (not result["18x18_found"]):
             validation = "❌ 실패 (미발견)"
         elif (not result["44x44_valid"]) or (not result["18x18_valid"]):
@@ -905,11 +949,14 @@ def display_summary_results(page_results):
             cross_validation = "❓ 검증불가"
         else:
             cross_validation = "❌ 실패"
+        
+        # 중복 상태
+        duplicate_status = "❌ 중복 감지" if result["has_duplicate_44x44"] else "✅ 정상"
             
-        data.append([page_num, matrix_44x44, matrix_18x18, validation, cross_validation])
+        data.append([page_num, matrix_44x44, matrix_18x18, validation, cross_validation, duplicate_status])
     
     # 테이블 헤더
-    columns = ["페이지/슬라이드", "44x44 검출", "18x18 검출", "규격 검증", "교차 검증"]
+    columns = ["페이지/슬라이드", "44x44 검출", "18x18 검출", "규격 검증", "교차 검증", "중복 확인"]
     
     # Streamlit 데이터프레임 표시
     import pandas as pd
@@ -917,10 +964,11 @@ def display_summary_results(page_results):
     st.dataframe(df, use_container_width=True)
     
     # 최종 결과 출력
+    # 경고가 있더라도 결과는 통과로 처리 (경고는 확인 필요 항목일 뿐)
     overall_valid = all(
         result["44x44_found"] and result["44x44_valid"] and 
         result["18x18_found"] and result["18x18_valid"] and 
-        result["cross_valid"] 
+        result["cross_valid"] and not result["has_duplicate_44x44"]
         for result in page_results.values()
     )
     
@@ -931,7 +979,7 @@ def display_summary_results(page_results):
             page_num for page_num, result in page_results.items() 
             if not (result["44x44_found"] and result["44x44_valid"] and 
                    result["18x18_found"] and result["18x18_valid"] and 
-                   result["cross_valid"])
+                   result["cross_valid"]) or result["has_duplicate_44x44"]
         ]
         st.error(f"❌ 실패: {', '.join(map(str, sorted(issues_pages)))} 페이지에서 문제가 발견되었습니다.")
 
@@ -966,6 +1014,23 @@ def display_format_help():
 # =========================================================
 
 def main():
+    # 세션 상태 초기화
+    if 'b_range_check' not in st.session_state:
+        st.session_state.b_range_check = False
+    if 'b_min_value' not in st.session_state:
+        st.session_state.b_min_value = 80
+    if 'b_max_value' not in st.session_state:
+        st.session_state.b_max_value = 250
+    if 'i_n_check' not in st.session_state:
+        st.session_state.i_n_check = True
+    if 'i_to_n_mapping' not in st.session_state:
+        st.session_state.i_to_n_mapping = {
+            "10-19": 10,
+            "20-29": 10,
+            "30-39": 10,
+            "40-49": 10,
+            "50-59": 10
+        }
 
     # 메인 페이지
     st.title("DataMatrix 바코드 검증 도구 🔍")
@@ -1007,6 +1072,41 @@ def main():
     with st.sidebar:
         if platform.system() == "Windows":
             st.markdown("---")
+        st.markdown("### 매트릭스 검증 설정")
+        
+        # B 식별자 범위 설정 UI
+        st.markdown("#### B 식별자 값 범위 설정")
+        st.markdown("44x44 매트릭스의 B 식별자 뒤에 오는 값(4자리 세트)의 허용 범위를 설정합니다.")
+        
+        st.session_state.b_range_check = st.checkbox("B 식별자 범위 검사 활성화", value=st.session_state.b_range_check)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.session_state.b_min_value = st.number_input("최소값", min_value=0, max_value=9999, value=st.session_state.b_min_value)
+        with col2:
+            st.session_state.b_max_value = st.number_input("최대값", min_value=0, max_value=9999, value=st.session_state.b_max_value)
+        
+        if st.session_state.b_range_check:
+            st.info(f"B 식별자 값이 {st.session_state.b_min_value}~{st.session_state.b_max_value} 범위 내에 있는지 검사합니다.")
+        
+        st.markdown("---")
+        st.markdown("### I-N 관계 검증 설정")
+        st.markdown("I 식별자 값 범위에 따라 N 식별자가 가질 수 있는 최대값을 설정합니다.")
+        
+        st.session_state.i_n_check = st.checkbox("I-N 관계 검사 활성화", value=st.session_state.i_n_check)
+        
+        if st.session_state.i_n_check:
+            st.info("다음 I 값 범위에 대한 N 최대값을 설정합니다.")
+            
+            ranges = ["10-19", "20-29", "30-39", "40-49", "50-59"]
+            for i_range in ranges:
+                st.session_state.i_to_n_mapping[i_range] = st.number_input(
+                    f"I{i_range} 범위의 N 최대값",
+                    min_value=1,
+                    max_value=999,
+                    value=st.session_state.i_to_n_mapping.get(i_range, 10),
+                    key=f"i_range_{i_range}"
+                )
             st.markdown("### Windows 환경 설정")
             st.markdown("""
             1. Python 환경에 pylibdmtx 설치: `pip install pylibdmtx`
@@ -1137,6 +1237,9 @@ def main():
             # 페이지별 결과를 저장할 딕셔너리
             page_results = {}
             
+            # 44x44 데이터매트릭스 중복 검사를 위한 추적 딕셔너리
+            matrices_44x44_track = {}  # key: 데이터 내용, value: 페이지 번호
+            
             # 바코드 처리 섹션 헤더
             st.markdown("### 🔎 바코드 검색 및 검증 결과")
             
@@ -1162,7 +1265,11 @@ def main():
                         "18x18_found": False,
                         "44x44_valid": False,
                         "18x18_valid": False,
-                        "cross_valid": False
+                        "cross_valid": False,
+                        "has_duplicate_44x44": False,  # 44x44 중복 감지 필드
+                        "duplicate_page": None,  # 중복이 처음 발견된 페이지 번호
+                        "has_warnings": False,  # 경고 상태 표시
+                        "warning_messages": []  # 경고 메시지 저장
                     }
                     
                     # 이 슬라이드에서 발견된 모든 바코드 저장
@@ -1214,7 +1321,14 @@ def main():
                         if re.search(r'C[A-Za-z0-9]{3}[.,]I\d{2}[.,]W(?:LO|SE)[.,]', data):
                             # 이미 44x44 데이터가 있는 경우 기존 것이 유효한지 확인하고 결정
                             if data_44x44 is None or not result_44x44["valid"]:
-                                result_44x44 = validate_44x44_matrix(data)
+                                result_44x44 = validate_44x44_matrix(
+                                    data,
+                                    b_range_check=st.session_state.b_range_check,
+                                    b_min_value=st.session_state.b_min_value,
+                                    b_max_value=st.session_state.b_max_value,
+                                    i_n_check=st.session_state.i_n_check,
+                                    i_to_n_mapping=st.session_state.i_to_n_mapping
+                                )
                                 data_44x44 = data
                                 
                                 # Streamlit UI 에 결과 표시
@@ -1224,6 +1338,16 @@ def main():
                                 # 결과 업데이트
                                 page_results[slide_num]["44x44_found"] = True
                                 page_results[slide_num]["44x44_valid"] = result_44x44["valid"]
+                                
+                                # 경고 상태 업데이트
+                                if "has_warnings" in result_44x44 and result_44x44["has_warnings"]:
+                                    page_results[slide_num]["has_warnings"] = True
+                                    page_results[slide_num]["warning_messages"].extend(result_44x44["warnings"])
+                                    
+                                    # 경고 메시지 추가 표시
+                                    st.warning("⚠️ 확인 필요:")
+                                    for warning in result_44x44["warnings"]:
+                                        st.write(f"* {warning}")
                         
                         # 18x18 매트릭스 패턴 검사
                         if re.search(r'M[A-Za-z0-9]{4}\.I\d{2}\.C[A-Za-z0-9]{3}\.', data):
@@ -1249,6 +1373,18 @@ def main():
                     
                     if missing_matrix:
                         st.warning(f"⚠️ 경고: 이 페이지에서 {', '.join(missing_matrix)}를 찾을 수 없습니다!")
+                    
+                    # 44x44 매트릭스 중복 검사
+                    if data_44x44 and page_results[slide_num]["44x44_valid"]:
+                        if data_44x44 in matrices_44x44_track:
+                            # 중복 발견
+                            original_page = matrices_44x44_track[data_44x44]
+                            page_results[slide_num]["has_duplicate_44x44"] = True
+                            page_results[slide_num]["duplicate_page"] = original_page
+                            st.error(f"❌ 중복 오류: 페이지 {original_page}에 있는 44x44 매트릭스와 동일한 데이터입니다.")
+                        else:
+                            # 처음 발견된 경우 추적 딕셔너리에 추가
+                            matrices_44x44_track[data_44x44] = slide_num
                     
                     # 교차 검증 수행
                     st.markdown("##### 교차 검증 결과")
@@ -1308,6 +1444,11 @@ def main():
                     report_text += f"- 44x44 매트릭스: {'발견' if result['44x44_found'] else '없음'}\n"
                     if result['44x44_found']:
                         report_text += f"  - 유효성: {'통과' if result['44x44_valid'] else '실패'}\n"
+                        report_text += f"  - 중복 상태: {'❌ 페이지 ' + str(result['duplicate_page']) + '와 중복' if result['has_duplicate_44x44'] else '✅ 중복 없음'}\n"
+                        if result['has_warnings']:
+                            report_text += f"  - 경고 상태: ⚠️ 확인 필요\n"
+                            for warning in result['warning_messages']:
+                                report_text += f"    * {warning}\n"
                     report_text += f"- 18x18 매트릭스: {'발견' if result['18x18_found'] else '없음'}\n"
                     if result['18x18_found']:
                         report_text += f"  - 유효성: {'통과' if result['18x18_valid'] else '실패'}\n"
