@@ -43,7 +43,9 @@ def save_current_config():
         "i_n_check": st.session_state.i_n_check,
         "i_to_n_mapping": st.session_state.i_to_n_mapping
     }
-    return save_config(config)import streamlit as st
+    return save_config(config)
+
+import streamlit as st
 import subprocess
 import os
 import io
