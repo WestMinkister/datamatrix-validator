@@ -385,8 +385,8 @@ def validate_44x44_matrix(data, b_range_check=False, b_min_value=0, b_max_value=
             # I 값이나 N 값이 정수로 변환할 수 없는 경우
             pass
     
-    # B 값 범위 검사 (활성화된 경우)
-    if b_range_check:
+    # B 값 범위 검사 (활성화된 경우에만 수행 + W가 'LO'가 아닐 경우에만 수행)
+    if b_range_check and W_val != 'LO':
         out_of_range_sets = []
         for B_set in B_sets:
             if B_set != '0000':
@@ -397,6 +397,9 @@ def validate_44x44_matrix(data, b_range_check=False, b_min_value=0, b_max_value=
         if out_of_range_sets:
             error_msg = f"B 식별자: 다음 값들이 지정된 범위({b_min_value}~{b_max_value})를 벗어납니다: {', '.join(out_of_range_sets)}"
             result["errors"].append(error_msg)
+    elif b_range_check and W_val == 'LO':
+        # W가 'LO'인 경우 B 값 범위 검사 제외
+        result["warnings"].append(f"W 식별자가 'LO'이미로 B 값 범위 검사를 건너뛀니다.")
     
     # B: 숫자 세트가 오름차순인지 및 큰 점프가 있는지 확인
     prev_set = None
