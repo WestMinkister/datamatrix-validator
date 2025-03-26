@@ -1252,16 +1252,9 @@ def main():
                                 key=f"i_val_{i_val}_key"
                             )
             
-            # 설정 저장 버튼 추가
-            save_settings_col1, _ = st.columns([1, 3])
-            with save_settings_col1:
-                if st.button("설정 저장", key="save_settings_button"):
-                    save_result = save_current_config()
-                    if save_result:
-                        st.success("설정이 성공적으로 저장되었습니다!")
-                    else:
-                        st.error("설정 저장 중 오류가 발생했습니다.")
-                        
+            # 설정은 관리자 모드 종료 시 자동으로 저장됩니다
+            st.info("설정은 관리자 모드 종료 시 자동으로 저장됩니다.")
+            
             st.markdown("### Windows 환경 설정")
             st.markdown("""
             1. Python 환경에 pylibdmtx 설치: `pip install pylibdmtx`
