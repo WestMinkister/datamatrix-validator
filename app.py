@@ -15,6 +15,12 @@ import base64
 from io import BytesIO
 import json
 
+# 디버그 메시지 표시 함수
+def debug_info(message):
+    """관리자만 볼 수 있는 디버그 메시지 표시"""
+    if st.session_state.get('admin_mode', False):
+        st.info(message)
+
 # 설정 파일 경로 (절대 경로 사용)
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "datamatrix_config.json")
 # 디버그: 설정 파일 경로 정의
@@ -48,25 +54,25 @@ def save_config(config):
     try:
         # 디버그: 저장 경로 출력
         abs_path = os.path.abspath(CONFIG_FILE)
-        st.sidebar.info(f"디버그: 설정 저장 시도 - 파일 경로: {abs_path}")
-        st.sidebar.info(f"디버그: 저장할 설정 데이터: {config}")
+        debug_info(f"디버그: 설정 저장 시도 - 파일 경로: {abs_path}")
+        debug_info(f"디버그: 저장할 설정 데이터: {config}")
         
         with open(CONFIG_FILE, 'w') as f:
             json.dump(config, f, indent=2)
         
         # 디버그: 저장 성공 메시지
-        st.sidebar.success(f"디버그: 설정이 성공적으로 저장되었습니다 ({time.strftime('%H:%M:%S')})")
+        debug_info(f"디버그: 설정이 성공적으로 저장되었습니다 ({time.strftime('%H:%M:%S')})")
         return True
     except Exception as e:
         # 자세한 에러 메시지 표시
-        st.sidebar.error(f"디버그: 설정 파일 저장 중 오류: {str(e)}")
+        debug_info(f"디버그: 설정 파일 저장 중 오류: {str(e)}")
         return False
 
 def save_current_config():
     """현재 세션에서 설정 값을 파일로 저장"""
     # 디버그: 함수 호출 및 세션 상태 기록
-    st.sidebar.info(f"디버그: save_current_config 호출됨 ({time.strftime('%H:%M:%S')})")
-    st.sidebar.info(f"디버그: b_range_check 값: {st.session_state.b_range_check}")
+    debug_info(f"디버그: save_current_config 호출됨 ({time.strftime('%H:%M:%S')})")
+    debug_info(f"디버그: b_range_check 값: {st.session_state.b_range_check}")
     
     config = {
         "b_range_check": st.session_state.b_range_check,
@@ -78,7 +84,7 @@ def save_current_config():
     
     result = save_config(config)
     # 디버그: 저장 결과 기록
-    st.sidebar.info(f"디버그: 설정 저장 결과: {'성공' if result else '실패'}")
+    debug_info(f"디버그: 설정 저장 결과: {'성공' if result else '실패'}")
     return result
 
 # 페이지 설정을 가장 먼저 호출해야 함
@@ -414,7 +420,7 @@ def validate_44x44_matrix(data, b_range_check=False, b_min_value=0, b_max_value=
                     result["warnings"].append(f"B 식별자: 숫자 세트 간에 큰 점프가 있습니다 ({prev_set} -> {B_set}, 차이: {int(B_set) - int(prev_set)})")
                 # 숫자 하나를 건너뛬어도 경고 표시
                 elif int(B_set) - int(prev_set) > 1:
-                    result["warnings"].append(f"B 식별자: 숫자 세트 간에 순차가 건너뛬어졌습니다 ({prev_set} -> {B_set}, 누락 값: {int(B_set) - int(prev_set) - 1}개)")
+                    result["warnings"].append(f"B 식별자: 숫자 세트 간에 순차가 건너뛰어졌습니다 ({prev_set} -> {B_set}, 누락 값: {int(B_set) - int(prev_set) - 1}개)")
             prev_set = B_set
     
     result["valid"] = len(result["errors"]) == 0
@@ -1091,7 +1097,7 @@ def main():
     config = load_config()
     
     # 디버그: 로드된 설정 출력
-    st.sidebar.info(f"디버그: 로드된 설정: {config}")
+    debug_info(f"디버그: 로드된 설정: {config}")
     
     # 세션 상태 초기화
     if 'admin_mode' not in st.session_state:
@@ -1108,6 +1114,8 @@ def main():
         st.session_state.i_n_check = config["i_n_check"]
     if 'i_to_n_mapping' not in st.session_state:
         st.session_state.i_to_n_mapping = config["i_to_n_mapping"]
+    if 'validation_mode' not in st.session_state:
+        st.session_state.validation_mode = "both"  # 기본값: 둘 다 검증
 
     # 메인 페이지
     st.title("DataMatrix 바코드 검증 도구 🔍")
@@ -1188,11 +1196,11 @@ def main():
             ):
                 # 체크박스가 체크되면 True로 설정
                 st.session_state.b_range_check = True
-                st.info(f"디버그: B 식별자 범위 체크박스 활성화됨: {st.session_state.b_range_check}")
+                debug_info(f"디버그: B 식별자 범위 체크박스 활성화됨: {st.session_state.b_range_check}")
             else:
                 # 체크박스가 해제되면 False로 설정
                 st.session_state.b_range_check = False
-                st.info(f"디버그: B 식별자 범위 체크박스 비활성화됨: {st.session_state.b_range_check}")
+                debug_info(f"디버그: B 식별자 범위 체크박스 비활성화됨: {st.session_state.b_range_check}")
             
             col1, col2 = st.columns(2)
             with col1:
@@ -1230,11 +1238,11 @@ def main():
             ):
                 # 체크박스가 체크되면 True로 설정
                 st.session_state.i_n_check = True
-                st.info(f"디버그: I-N 관계 검사 체크박스 활성화됨: {st.session_state.i_n_check}")
+                debug_info(f"디버그: I-N 관계 검사 체크박스 활성화됨: {st.session_state.i_n_check}")
             else:
                 # 체크박스가 해제되면 False로 설정
                 st.session_state.i_n_check = False
-                st.info(f"디버그: I-N 관계 검사 체크박스 비활성화됨: {st.session_state.i_n_check}")
+                debug_info(f"디버그: I-N 관계 검사 체크박스 비활성화됨: {st.session_state.i_n_check}")
             
             if st.session_state.i_n_check:
                 st.info("각 I 값에 대한 N 최대값을 설정합니다.")
@@ -1311,6 +1319,25 @@ def main():
     uploaded_file = st.file_uploader("검증할 파일을 업로드하세요",
                                     type=["pdf", "pptx", "ppt", "xlsx", "xls"],
                                     help="PDF, PowerPoint 또는 Excel 파일을 업로드하세요. 각 페이지에서 바코드가 검색됩니다.")
+    
+    # 검증 모드 선택 옵션 (라디오 버튼)
+    st.markdown("### 검증 모드 선택")
+    validation_mode = st.radio(
+        "검증할 바코드 유형을 선택하세요:",
+        options=["둘 다 검증", "44x44만 검증", "18x18만 검증"],
+        index=0, # 기본값: 둘 다 검증
+        horizontal=True
+    )
+    
+    if validation_mode == "둘 다 검증":
+        st.session_state.validation_mode = "both"
+        st.info("모든 페이지/슬라이드에서 44x44와 18x18 바코드를 모두 검증하고 교차 검증도 진행합니다.")
+    elif validation_mode == "44x44만 검증":
+        st.session_state.validation_mode = "44x44"
+        st.info("44x44 바코드만 검증합니다. 18x18 바코드와 교차 검증은 건너뛅니다.")
+    else: # "18x18만 검증"
+        st.session_state.validation_mode = "18x18"
+        st.info("18x18 바코드만 검증합니다. 44x44 바코드와 교차 검증은 건너뛅니다.")
     
     # 바코드 형식 도움말 표시
     display_format_help()
@@ -1411,18 +1438,46 @@ def main():
                         for img_idx, image in enumerate(images):
                             st.image(image, caption=f"이미지 #{img_idx+1} ({image.width}x{image.height})", use_column_width=True)
                     
-                    # 페이지 결과 초기화
-                    page_results[slide_num] = {
-                        "44x44_found": False,
-                        "18x18_found": False,
-                        "44x44_valid": False,
-                        "18x18_valid": False,
-                        "cross_valid": False,
-                        "has_duplicate_44x44": False,  # 44x44 중복 감지 필드
-                        "duplicate_page": None,  # 중복이 처음 발견된 페이지 번호
-                        "has_warnings": False,  # 경고 상태 표시
-                        "warning_messages": []  # 경고 메시지 저장
-                    }
+                    # 페이지 결과 초기화 - 검증 모드에 따라 다르게 초기화
+                    if st.session_state.validation_mode == "both":
+                        # 둘 다 검증 모드 - 모든 검증 요소 필요
+                        page_results[slide_num] = {
+                            "44x44_found": False,
+                            "18x18_found": False,
+                            "44x44_valid": False,
+                            "18x18_valid": False,
+                            "cross_valid": False,
+                            "has_duplicate_44x44": False,  # 44x44 중복 감지 필드
+                            "duplicate_page": None,  # 중복이 처음 발견된 페이지 번호
+                            "has_warnings": False,  # 경고 상태 표시
+                            "warning_messages": []  # 경고 메시지 저장
+                        }
+                    elif st.session_state.validation_mode == "44x44":  
+                        # 44x44만 검증 모드 - 18x18 관련 검증 사용 안함
+                        page_results[slide_num] = {
+                            "44x44_found": False,
+                            "18x18_found": True,  # 항상 True로 처리 (바코드가 없어도 오류 표시 안함)
+                            "44x44_valid": False,
+                            "18x18_valid": True,  # 항상 True로 처리
+                            "cross_valid": True,   # 항상 True로 처리 (교차 검증 사용 안함)
+                            "has_duplicate_44x44": False,
+                            "duplicate_page": None,
+                            "has_warnings": False,
+                            "warning_messages": []
+                        }
+                    else:  # "18x18" 모드
+                        # 18x18만 검증 모드 - 44x44 관련 검증 사용 안함
+                        page_results[slide_num] = {
+                            "44x44_found": True,  # 항상 True로 처리 (바코드가 없어도 오류 표시 안함) 
+                            "18x18_found": False,
+                            "44x44_valid": True,  # 항상 True로 처리
+                            "18x18_valid": False,
+                            "cross_valid": True,   # 항상 True로 처리 (교차 검증 사용 안함)
+                            "has_duplicate_44x44": False,
+                            "duplicate_page": None,
+                            "has_warnings": False,
+                            "warning_messages": []
+                        }
                     
                     # 이 슬라이드에서 발견된 모든 바코드 저장
                     all_barcodes = []
@@ -1470,7 +1525,8 @@ def main():
                     
                     for idx, data in enumerate(all_barcodes):
                         # 44x44 매트릭스 패턴 검사
-                        if re.search(r'C[A-Za-z0-9]{3}[.,]I\d{2}[.,]W(?:LO|SE)[.,]', data):
+                        if re.search(r'C[A-Za-z0-9]{3}[.,]I\d{2}[.,]W(?:LO|SE)[.,]', data) and \
+                           (st.session_state.validation_mode == "both" or st.session_state.validation_mode == "44x44"):
                             # 이미 44x44 데이터가 있는 경우 기존 것이 유효한지 확인하고 결정
                             if data_44x44 is None or not result_44x44["valid"]:
                                 result_44x44 = validate_44x44_matrix(
@@ -1502,7 +1558,8 @@ def main():
                                         st.write(f"* {warning}")
                         
                         # 18x18 매트릭스 패턴 검사
-                        if re.search(r'M[A-Za-z0-9]{4}\.I\d{2}\.C[A-Za-z0-9]{3}\.', data):
+                        if re.search(r'M[A-Za-z0-9]{4}\.I\d{2}\.C[A-Za-z0-9]{3}\.', data) and \
+                           (st.session_state.validation_mode == "both" or st.session_state.validation_mode == "18x18"):
                             # 이미 18x18 데이터가 있는 경우 기존 것이 유효한지 확인하고 결정
                             if data_18x18 is None or not result_18x18["valid"]:
                                 result_18x18 = validate_18x18_matrix(data)
@@ -1538,24 +1595,33 @@ def main():
                             # 처음 발견된 경우 추적 딕셔너리에 추가
                             matrices_44x44_track[data_44x44] = slide_num
                     
-                    # 교차 검증 수행
-                    st.markdown("##### 교차 검증 결과")
-                    if data_44x44 and data_18x18:
-                        if result_44x44["pattern_match"] and result_18x18["pattern_match"]:
-                            cross_results = cross_validate_matrices(result_44x44, result_18x18)
-                            
-                            if "교차 검증이 성공적으로 완료되었습니다." in cross_results:
-                                st.success(cross_results[0])
-                                page_results[slide_num]["cross_valid"] = True
+                    # 교차 검증 수행 (둘 다 검증 모드일 때만)
+                    if st.session_state.validation_mode == "both":
+                        st.markdown("##### 교차 검증 결과")
+                        if data_44x44 and data_18x18:
+                            if result_44x44["pattern_match"] and result_18x18["pattern_match"]:
+                                cross_results = cross_validate_matrices(result_44x44, result_18x18)
+                                
+                                if "교차 검증이 성공적으로 완료되었습니다." in cross_results:
+                                    st.success(cross_results[0])
+                                    page_results[slide_num]["cross_valid"] = True
+                                else:
+                                    st.error("교차 검증 실패")
+                                    for msg in cross_results:
+                                        st.warning(f"- {msg}")
+                                    page_results[slide_num]["cross_valid"] = False
                             else:
-                                st.error("교차 검증 실패")
-                                for msg in cross_results:
-                                    st.warning(f"- {msg}")
-                                page_results[slide_num]["cross_valid"] = False
+                                st.error("교차 검증을 수행할 수 없습니다. 두 매트릭스 모두 기본 형식이 일치해야 합니다.")
                         else:
-                            st.error("교차 검증을 수행할 수 없습니다. 두 매트릭스 모두 기본 형식이 일치해야 합니다.")
+                            st.error("페이지에 44x44와 18x18 매트릭스가 모두 필요합니다.")
                     else:
-                        st.error("페이지에 44x44와 18x18 매트릭스가 모두 필요합니다.")
+                        # 단일 검증 모드인 경우
+                        if st.session_state.validation_mode == "44x44" and data_44x44:
+                            st.info("현재 '44x44만 검증' 모드입니다. 교차 검증을 실행하려면 '둘 다 검증' 모드를 선택하세요.")
+                            page_results[slide_num]["cross_valid"] = True  # 단일 바코드 모드에서는 교차 검증 성공으로 처리
+                        elif st.session_state.validation_mode == "18x18" and data_18x18:
+                            st.info("현재 '18x18만 검증' 모드입니다. 교차 검증을 실행하려면 '둘 다 검증' 모드를 선택하세요.")
+                            page_results[slide_num]["cross_valid"] = True  # 단일 바코드 모드에서는 교차 검증 성공으로 처리
             
             # 진행 상태 표시 제거
             progress_placeholder.empty()
