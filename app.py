@@ -405,7 +405,7 @@ def validate_44x44_matrix(data, b_range_check=False, b_min_value=0, b_max_value=
             result["errors"].append(error_msg)
     elif b_range_check and W_val == 'LO':
         # W가 'LO'인 경우 B 값 범위 검사 제외
-        result["warnings"].append(f"W 식별자가 'LO'이미로 B 값 범위 검사를 건너뛀니다.")
+        result["warnings"].append(f"W 식별자가 'LO'이미로 B 값 범위 검사를 건너뜁니다.")
     
     # B: 숫자 세트가 오름차순인지 및 큰 점프가 있는지 확인
     prev_set = None
@@ -1334,10 +1334,10 @@ def main():
         st.info("모든 페이지/슬라이드에서 44x44와 18x18 바코드를 모두 검증하고 교차 검증도 진행합니다.")
     elif validation_mode == "44x44만 검증":
         st.session_state.validation_mode = "44x44"
-        st.info("44x44 바코드만 검증합니다. 18x18 바코드와 교차 검증은 건너뛅니다.")
+        st.info("44x44 바코드만 검증합니다. 18x18 바코드와 교차 검증은 건너뜁니다.")
     else: # "18x18만 검증"
         st.session_state.validation_mode = "18x18"
-        st.info("18x18 바코드만 검증합니다. 44x44 바코드와 교차 검증은 건너뛅니다.")
+        st.info("18x18 바코드만 검증합니다. 44x44 바코드와 교차 검증은 건너뜁니다.")
     
     # 바코드 형식 도움말 표시
     display_format_help()
