@@ -491,7 +491,13 @@ def validate_18x18_matrix(data):
     return result
 
 def cross_validate_matrices(matrix_44x44, matrix_18x18):
-    """두 매트릭스 간의 교차 검증"""
+    """두 매트릭스 간의 교차 검증
+    
+    고정부(18x18 매트릭스)와 변동부(44x44 매트릭스) 간의 일관성을 확인하는 검증을 수행합니다.
+    다음 사항을 검증합니다:
+    1. 18x18의 I 값과 44x44의 I 값 일치 여부
+    2. 18x18의 C 값과 44x44의 C 값 일치 여부
+    """
     errors = []
     
     # 둘 중 하나라도 패턴 매치가 실패한 경우
@@ -1029,13 +1035,13 @@ def display_summary_results(page_results):
         else:
             cross_validation = "❌ 실패"
         
-        # 중복 상태
-        duplicate_status = "❌ 중복 감지" if result["has_duplicate_44x44"] else "✅ 정상"
+        # 페이지간 검증 상태
+        page_validation_status = "❌ 중복 감지" if result["has_duplicate_44x44"] else "✅ 정상"
             
-        data.append([page_num, matrix_44x44, matrix_18x18, validation, cross_validation, duplicate_status])
+        data.append([page_num, matrix_44x44, matrix_18x18, validation, cross_validation, page_validation_status])
     
     # 테이블 헤더
-    columns = ["페이지/슬라이드", "44x44 검출", "18x18 검출", "규격 검증", "교차 검증", "중복 확인"]
+    columns = ["페이지/슬라이드", "44x44 검출", "18x18 검출", "규격 검증", "교차 검증", "페이지간 검증"]
     
     # Streamlit 데이터프레임 표시
     import pandas as pd
@@ -1452,7 +1458,7 @@ def main():
                             "has_warnings": False,  # 경고 상태 표시
                             "warning_messages": []  # 경고 메시지 저장
                         }
-                    elif st.session_state.validation_mode == "44x44":  
+                    elif st.session_state.validation_mode == "44x44":
                         # 44x44만 검증 모드 - 18x18 관련 검증 사용 안함
                         page_results[slide_num] = {
                             "44x44_found": False,
@@ -1468,7 +1474,7 @@ def main():
                     else:  # "18x18" 모드
                         # 18x18만 검증 모드 - 44x44 관련 검증 사용 안함
                         page_results[slide_num] = {
-                            "44x44_found": True,  # 항상 True로 처리 (바코드가 없어도 오류 표시 안함) 
+                            "44x44_found": True,  # 항상 True로 처리 (바코드가 없어도 오류 표시 안함)
                             "18x18_found": False,
                             "44x44_valid": True,  # 항상 True로 처리
                             "18x18_valid": False,
