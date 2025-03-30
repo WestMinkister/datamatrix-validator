@@ -1293,24 +1293,58 @@ def display_summary_results(page_results):
     st.dataframe(df, use_container_width=True)
     
     # 최종 결과 출력
-    # 경고가 있더라도 결과는 통과로 처리 (경고는 확인 필요 항목일 뿐)
-    overall_valid = all(
-        result["44x44_found"] and result["44x44_valid"] and
-        result["18x18_found"] and result["18x18_valid"] and
-        result["cross_valid"] and not result["has_duplicate_44x44"]
-        for result in page_results.values()
-    )
+    # 검증 모드에 따라 결과 판단 기준 적용
+    if st.session_state.validation_mode == "44x44":  # 44x44만 검증 모드
+        overall_valid = all(
+            (result["44x44_found"] and result["44x44_valid"] and not result["has_duplicate_44x44"])
+            for result in page_results.values()
+        )
+        
+        if overall_valid:
+            st.success("✅ 성공: 모든 페이지의 44x44 바코드 검증이 통과했습니다.")
+        else:
+            issues_pages = [
+                page_num for page_num, result in page_results.items()
+                if not (result["44x44_found"] and result["44x44_valid"]) or result["has_duplicate_44x44"]
+            ]
+            if issues_pages:
+                st.error(f"❌ 실패: {', '.join(map(str, sorted(issues_pages)))} 페이지의 44x44 바코드에서 문제가 발견되었습니다.")
     
-    if overall_valid:
-        st.success("✅ 성공: 모든 페이지가 검증을 통과했습니다.")
-    else:
-        issues_pages = [
-            page_num for page_num, result in page_results.items()
-            if not (result["44x44_found"] and result["44x44_valid"] and
-                   result["18x18_found"] and result["18x18_valid"] and
-                   result["cross_valid"]) or result["has_duplicate_44x44"]
-        ]
-        st.error(f"❌ 실패: {', '.join(map(str, sorted(issues_pages)))} 페이지에서 문제가 발견되었습니다.")
+    elif st.session_state.validation_mode == "18x18":  # 18x18만 검증 모드
+        overall_valid = all(
+            (result["18x18_found"] and result["18x18_valid"] and not result.get("p_value_duplicate", False))
+            for result in page_results.values()
+        )
+        
+        if overall_valid:
+            st.success("✅ 성공: 모든 페이지의 18x18 바코드 검증이 통과했습니다.")
+        else:
+            issues_pages = [
+                page_num for page_num, result in page_results.items()
+                if not (result["18x18_found"] and result["18x18_valid"]) or result.get("p_value_duplicate", False)
+            ]
+            if issues_pages:
+                st.error(f"❌ 실패: {', '.join(map(str, sorted(issues_pages)))} 페이지의 18x18 바코드에서 문제가 발견되었습니다.")
+    
+    else:  # 둘 다 검증 모드
+        overall_valid = all(
+            result["44x44_found"] and result["44x44_valid"] and
+            result["18x18_found"] and result["18x18_valid"] and
+            result["cross_valid"] and not result["has_duplicate_44x44"] and not result.get("p_value_duplicate", False)
+            for result in page_results.values()
+        )
+        
+        if overall_valid:
+            st.success("✅ 성공: 모든 페이지가 검증을 통과했습니다.")
+        else:
+            issues_pages = [
+                page_num for page_num, result in page_results.items()
+                if not (result["44x44_found"] and result["44x44_valid"] and
+                      result["18x18_found"] and result["18x18_valid"] and
+                      result["cross_valid"]) or result["has_duplicate_44x44"] or result.get("p_value_duplicate", False)
+            ]
+            if issues_pages:
+                st.error(f"❌ 실패: {', '.join(map(str, sorted(issues_pages)))} 페이지에서 문제가 발견되었습니다.")
 
 def display_format_help():
     """데이터 매트릭스 형식 정보 출력 (Streamlit 버전)"""
