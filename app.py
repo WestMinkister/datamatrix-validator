@@ -15,6 +15,23 @@ import base64
 from io import BytesIO
 import json
 
+# 추가 검증 모듈 불러오기
+try:
+    from validator_addon import validate_pages_p_values, validate_pages_s_values, process_page_validation
+except ImportError:
+    # 모듈이 없는 경우를 처리
+    st.warning("페이지간 검증 기능을 사용할 수 없습니다. validator_addon.py 파일을 확인하세요.")
+    
+    # 폴백 함수 정의
+    def validate_pages_p_values(page_results):
+        return page_results
+        
+    def validate_pages_s_values(page_results):
+        return page_results
+        
+    def process_page_validation(page_results, slide_images, page_tabs, session_state):
+        return page_results
+
 # 디버그 메시지 표시 함수
 def debug_info(message):
     """관리자만 볼 수 있는 디버그 메시지 표시"""
@@ -1735,7 +1752,14 @@ def main():
                     # 각 바코드 데이터 처리
                     st.markdown("#### 바코드 데이터 검증")
                     
+                    # 선택한 검증 모드에 대한 설명 표시
+                    if st.session_state.validation_mode == "44x44":
+                        st.info("현재 44x44 매트릭스만 검증하는 모드입니다.")
+                    elif st.session_state.validation_mode == "18x18":
+                        st.info("현재 18x18 매트릭스만 검증하는 모드입니다.")
+                    
                     for idx, data in enumerate(all_barcodes):
+                        # 검증 모드에 맞는 바코드만 처리
                         # 44x44 매트릭스 패턴 검사
                         if re.search(r'C[A-Za-z0-9]{3}[.,]I\d{2}[.,]W(?:LO|SE)[.,]', data) and \
                            (st.session_state.validation_mode == "both" or st.session_state.validation_mode == "44x44"):
@@ -1795,9 +1819,9 @@ def main():
                     
                     # 페이지에 두 종류의 매트릭스가 모두 있는지 확인
                     missing_matrix = []
-                    if not page_results[slide_num]["44x44_found"]:
+                    if st.session_state.validation_mode in ["both", "44x44"] and not page_results[slide_num]["44x44_found"]:
                         missing_matrix.append("44x44 매트릭스")
-                    if not page_results[slide_num]["18x18_found"]:
+                    if st.session_state.validation_mode in ["both", "18x18"] and not page_results[slide_num]["18x18_found"]:
                         missing_matrix.append("18x18 매트릭스")
                     
                     if missing_matrix:
@@ -1842,24 +1866,8 @@ def main():
                             st.info("현재 '18x18만 검증' 모드입니다. 교차 검증을 실행하려면 '둘 다 검증' 모드를 선택하세요.")
             
             # 페이지간 추가 검증 실행
-            if page_results:
-                # 1. 18x18의 P 값 중복 검사
-                page_results = validate_pages_p_values(page_results)
-                
-                # 2. 44x44의 S 값 검증 (중복 및 B 순서 확인)
-                page_results = validate_pages_s_values(page_results)
-                
-                # 페이지간 유효성 검사 결과 표시
-                for page_num, result in page_results.items():
-                    # P 값 중복 관련 오류 표시
-                    if result.get("p_value_duplicate", False):
-                        with page_tabs[list(sorted(slide_images.keys())).index(page_num)]:
-                            st.error(f"\u274c 페이지간 검증 오류: {result.get('p_duplicate_message')}")
-                    
-                    # S 값 관련 오류 표시
-                    if result.get("s_value_invalid", False):
-                        with page_tabs[list(sorted(slide_images.keys())).index(page_num)]:
-                            st.error(f"\u274c 페이지간 검증 오류: {result.get('s_invalid_message')}")
+            # 외부 모듈의 process_page_validation 함수 호출
+            page_results = process_page_validation(page_results, slide_images, page_tabs, st.session_state)
             
             # 진행 상태 표시 제거
             progress_placeholder.empty()
