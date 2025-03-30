@@ -1538,11 +1538,6 @@ def main():
         check_system_dependencies()
         st.session_state.system_checked = True
     
-    # 파일 업로드 기능
-    uploaded_file = st.file_uploader("검증할 파일을 업로드하세요",
-                                    type=["pdf", "pptx", "ppt", "xlsx", "xls"],
-                                    help="PDF, PowerPoint 또는 Excel 파일을 업로드하세요. 각 페이지에서 바코드가 검색됩니다.")
-    
     # 검증 모드 선택 옵션 (라디오 버튼)
     st.markdown("### 검증 모드 선택")
     validation_mode = st.radio(
@@ -1565,6 +1560,11 @@ def main():
     # 바코드 형식 도움말 표시
     display_format_help()
     
+    # 파일 업로드 기능
+    uploaded_file = st.file_uploader("검증할 파일을 업로드하세요",
+                                    type=["pdf", "pptx", "ppt", "xlsx", "xls"],
+                                    help="PDF, PowerPoint 또는 Excel 파일을 업로드하세요. 각 페이지에서 바코드가 검색됩니다.")
+        
     # 파일이 업로드된 경우 처리
     if uploaded_file is not None:
         # 파일 정보 표시
@@ -1598,6 +1598,7 @@ def main():
             # 파일 형식에 따라 이미지 추출
             if file_extension == 'pdf':
                 status_placeholder.markdown("PDF 파일에서 이미지 추출 중...")
+                
                 
                 # PDF는 페이지별로 이미지 추출
                 images = extract_images_from_pdf(file_content,
