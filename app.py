@@ -123,18 +123,34 @@ except Exception as e:
 # CSS 스타일 적용
 st.markdown("""
 <style>
-    .main .block-container {
-        padding-top: 2rem;
-        padding-bottom: 2rem;
-    }
-    h1, h2, h3 {
-        margin-bottom: 0.5rem;
-    }
-    .stProgress > div > div > div > div {
-        background-color: #4CAF50;
-    }
-    .success-box {
-        padding: 1rem;
+.main .block-container {
+padding-top: 2rem;
+padding-bottom: 2rem;
+}
+h1, h2, h3 {
+margin-bottom: 0.5rem;
+    margin-top: 1.5rem;
+}
+/* 타이틀 간격 조정 */
+h3 {
+    margin-top: 2.5rem;
+margin-bottom: 1rem;
+}
+/* 첫 번째 h3는 더 작은 마진으로 시작 */
+h1 + h3, h2 + h3 {
+    margin-top: 1.5rem;
+}
+/* 섹션 구분 스타일 */
+.section-divider {
+margin-top: 2rem;
+margin-bottom: 2rem;
+    border-bottom: 1px solid #e0e0e0;
+}
+.stProgress > div > div > div > div {
+background-color: #4CAF50;
+}
+.success-box {
+    padding: 1rem;
         border-radius: 0.5rem;
         background-color: #F0FFF0;
         border: 1px solid #CCFFCC;
@@ -1179,28 +1195,36 @@ def display_summary_results(page_results):
         
         # 규격 검증 상태
         if st.session_state.validation_mode == "44x44":  # 44x44만 검증 모드
-            if result["44x44_found"] and result["44x44_valid"]:
-                if result["has_duplicate_44x44"]:
-                    validation = "❌ 실패 (페이지간 검증)"
-                elif result.get("s_value_invalid", False) or result["has_warnings"]:
-                    validation = "⚠️ 확인 필요"
+            if result.get("skip_18x18", False):
+                # 18x18 검증이 생략된 경우
+                if result["44x44_found"] and result["44x44_valid"]:
+                    if result["has_duplicate_44x44"]:
+                        validation = "❌ 실패 (페이지간 검증)"
+                    elif result.get("s_value_invalid", False) or result["has_warnings"]:
+                        validation = "⚠️ 확인 필요"
+                    else:
+                        validation = "✅ 통과"
+                elif not result["44x44_found"]:
+                    validation = "❌ 실패 (미발견)"
                 else:
-                    validation = "✅ 통과"
-            elif not result["44x44_found"]:
-                validation = "❌ 실패 (미발견)"
+                    validation = "❌ 실패 (규격불일치)"
             else:
-                validation = "❌ 실패 (규격불일치)"
+                validation = "❌ 오류 (모드 불일치)"
                 
         elif st.session_state.validation_mode == "18x18":  # 18x18만 검증 모드
-            if result["18x18_found"] and result["18x18_valid"]:
-                if result.get("p_value_duplicate", False):
-                    validation = "❌ 실패 (페이지간 검증)"
+            if result.get("skip_44x44", False):
+                # 44x44 검증이 생략된 경우
+                if result["18x18_found"] and result["18x18_valid"]:
+                    if result.get("p_value_duplicate", False):
+                        validation = "❌ 실패 (페이지간 검증)"
+                    else:
+                        validation = "✅ 통과"
+                elif not result["18x18_found"]:
+                    validation = "❌ 실패 (미발견)"
                 else:
-                    validation = "✅ 통과"
-            elif not result["18x18_found"]:
-                validation = "❌ 실패 (미발견)"
+                    validation = "❌ 실패 (규격불일치)"
             else:
-                validation = "❌ 실패 (규격불일치)"
+                validation = "❌ 오류 (모드 불일치)"
                 
         else:  # 둘 다 검증 모드
             if result["44x44_found"] and result["44x44_valid"] and result["18x18_found"] and result["18x18_valid"]:
@@ -1229,17 +1253,25 @@ def display_summary_results(page_results):
         
         # 페이지간 검증 상태
         if st.session_state.validation_mode == "44x44":  # 44x44만 검증 모드
-            if result["has_duplicate_44x44"]:
-                page_validation_status = "❌ 44x44 중복"
-            elif result.get("s_value_invalid", False):
-                page_validation_status = "⚠️ S값 불일치"
+            if result.get("skip_18x18", False):
+                if result["has_duplicate_44x44"]:
+                    page_validation_status = "❌ 44x44 중복"
+                elif result.get("s_value_invalid", False):
+                    page_validation_status = "⚠️ S값 불일치"
+                else:
+                    page_validation_status = "✅ 정상"
             else:
-                page_validation_status = "✅ 정상"
+                page_validation_status = "❓ 모드 불일치"
+                
         elif st.session_state.validation_mode == "18x18":  # 18x18만 검증 모드
-            if result.get("p_value_duplicate", False):
-                page_validation_status = "❌ P값 중복"
+            if result.get("skip_44x44", False):
+                if result.get("p_value_duplicate", False):
+                    page_validation_status = "❌ P값 중복"
+                else:
+                    page_validation_status = "✅ 정상"
             else:
-                page_validation_status = "✅ 정상"
+                page_validation_status = "❓ 모드 불일치"
+                
         else:  # 둘 다 검증 모드
             if result["has_duplicate_44x44"]:
                 page_validation_status = "❌ 44x44 중복"
@@ -1374,7 +1406,6 @@ def main():
             """, unsafe_allow_html=True)
     
     st.markdown("---")  # 구분선
-    st.markdown("PDF, PowerPoint, Excel 파일에서 DataMatrix 바코드를 검색하고 검증합니다.")
 
     # 사이드바 설정
     with st.sidebar:
@@ -1560,6 +1591,9 @@ def main():
     # 바코드 형식 도움말 표시
     display_format_help()
     
+    # 섹션 구분선 추가
+    st.markdown("<div class='section-divider'></div>", unsafe_allow_html=True)
+    
     # 파일 업로드 기능
     uploaded_file = st.file_uploader("검증할 파일을 업로드하세요",
                                     type=["pdf", "pptx", "ppt", "xlsx", "xls"],
@@ -1648,7 +1682,7 @@ def main():
             all_44x44_data = {}  # 각 페이지의 44x44 매트릭스 데이터 저장
             
             # 바코드 처리 섹션 헤더
-            st.markdown("\n\n### 🔎 바코드 검색 및 검증 결과")
+            st.markdown("### 🔎 바코드 검색 및 검증 결과")
             
             # 각 슬라이드/페이지 분석 결과를 보여줄 탭
             page_tabs = st.tabs([f"페이지 {slide_num}" for slide_num in sorted(slide_images.keys())])
