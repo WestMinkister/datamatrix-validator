@@ -1150,26 +1150,60 @@ def display_summary_results(page_results):
     data = []
     for page_num, result in sorted(page_results.items()):
         # 매트릭스 상태
-        matrix_44x44 = "✅ 발견" if result["44x44_found"] else "❌ 없음"
-        matrix_18x18 = "✅ 발견" if result["18x18_found"] else "❌ 없음"
+        if result.get("skip_44x44", False):  # 44x44 검증 생략한 경우
+            matrix_44x44 = "🚫 검증 안함"
+        else:  # 일반 검증 상태
+            matrix_44x44 = "✅ 발견" if result["44x44_found"] else "❌ 없음"
+        
+        if result.get("skip_18x18", False):  # 18x18 검증 생략한 경우
+            matrix_18x18 = "🚫 검증 안함"
+        else:  # 일반 검증 상태
+            matrix_18x18 = "✅ 발견" if result["18x18_found"] else "❌ 없음"
         
         # 규격 검증 상태
-        if result["44x44_found"] and result["44x44_valid"] and result["18x18_found"] and result["18x18_valid"]:
-            if result["has_duplicate_44x44"] or result.get("p_value_duplicate", False) or result.get("s_value_invalid", False):
-                validation = "❌ 실패 (페이지간 검증)"
-            elif result["has_warnings"]:
-                validation = "⚠️ 확인 필요"
+        if st.session_state.validation_mode == "44x44":  # 44x44만 검증 모드
+            if result["44x44_found"] and result["44x44_valid"]:
+                if result["has_duplicate_44x44"]:
+                    validation = "❌ 실패 (페이지간 검증)"
+                elif result.get("s_value_invalid", False) or result["has_warnings"]:
+                    validation = "⚠️ 확인 필요"
+                else:
+                    validation = "✅ 통과"
+            elif not result["44x44_found"]:
+                validation = "❌ 실패 (미발견)"
             else:
-                validation = "✅ 통과"
-        elif (not result["44x44_found"]) or (not result["18x18_found"]):
-            validation = "❌ 실패 (미발견)"
-        elif (not result["44x44_valid"]) or (not result["18x18_valid"]):
-            validation = "❌ 실패 (규격불일치)"
-        else:
-            validation = "⚠️ 일부만 통과"
+                validation = "❌ 실패 (규격불일치)"
+                
+        elif st.session_state.validation_mode == "18x18":  # 18x18만 검증 모드
+            if result["18x18_found"] and result["18x18_valid"]:
+                if result.get("p_value_duplicate", False):
+                    validation = "❌ 실패 (페이지간 검증)"
+                else:
+                    validation = "✅ 통과"
+            elif not result["18x18_found"]:
+                validation = "❌ 실패 (미발견)"
+            else:
+                validation = "❌ 실패 (규격불일치)"
+                
+        else:  # 둘 다 검증 모드
+            if result["44x44_found"] and result["44x44_valid"] and result["18x18_found"] and result["18x18_valid"]:
+                if result["has_duplicate_44x44"] or result.get("p_value_duplicate", False):
+                    validation = "❌ 실패 (페이지간 검증)"
+                elif result.get("s_value_invalid", False) or result["has_warnings"]:
+                    validation = "⚠️ 확인 필요"
+                else:
+                    validation = "✅ 통과"
+            elif (not result["44x44_found"]) or (not result["18x18_found"]):
+                validation = "❌ 실패 (미발견)"
+            elif (not result["44x44_valid"]) or (not result["18x18_valid"]):
+                validation = "❌ 실패 (규격불일치)"
+            else:
+                validation = "⚠️ 일부만 통과"
         
         # 교차 검증 상태
-        if result["44x44_found"] and result["18x18_found"] and result["cross_valid"]:
+        if result.get("skip_44x44", False) or result.get("skip_18x18", False):  # 단일 바코드 검증인 경우
+            cross_validation = "🚫 검증 안함"
+        elif result["44x44_found"] and result["18x18_found"] and result["cross_valid"]:
             cross_validation = "✅ 통과"
         elif not (result["44x44_found"] and result["18x18_found"]):
             cross_validation = "❓ 검증불가"
@@ -1177,14 +1211,27 @@ def display_summary_results(page_results):
             cross_validation = "❌ 실패"
         
         # 페이지간 검증 상태
-        if result["has_duplicate_44x44"]:
-            page_validation_status = "❌ 44x44 중복"
-        elif result.get("p_value_duplicate", False):
-            page_validation_status = "❌ P값 중복"
-        elif result.get("s_value_invalid", False):
-            page_validation_status = "❌ S값 불일치"
-        else:
-            page_validation_status = "✅ 정상"
+        if st.session_state.validation_mode == "44x44":  # 44x44만 검증 모드
+            if result["has_duplicate_44x44"]:
+                page_validation_status = "❌ 44x44 중복"
+            elif result.get("s_value_invalid", False):
+                page_validation_status = "⚠️ S값 불일치"
+            else:
+                page_validation_status = "✅ 정상"
+        elif st.session_state.validation_mode == "18x18":  # 18x18만 검증 모드
+            if result.get("p_value_duplicate", False):
+                page_validation_status = "❌ P값 중복"
+            else:
+                page_validation_status = "✅ 정상"
+        else:  # 둘 다 검증 모드
+            if result["has_duplicate_44x44"]:
+                page_validation_status = "❌ 44x44 중복"
+            elif result.get("p_value_duplicate", False):
+                page_validation_status = "❌ P값 중복"
+            elif result.get("s_value_invalid", False):
+                page_validation_status = "⚠️ S값 불일치"
+            else:
+                page_validation_status = "✅ 정상"
             
         data.append([page_num, matrix_44x44, matrix_18x18, validation, cross_validation, page_validation_status])
     
@@ -1619,10 +1666,11 @@ def main():
                         # 44x44만 검증 모드 - 18x18 관련 검증 사용 안함
                         page_results[slide_num] = {
                             "44x44_found": False,
-                            "18x18_found": True,  # 항상 True로 처리 (바코드가 없어도 오류 표시 안함)
+                            "18x18_found": False,  # 검증 안함으로 처리
                             "44x44_valid": False,
-                            "18x18_valid": True,  # 항상 True로 처리
-                            "cross_valid": True,   # 항상 True로 처리 (교차 검증 사용 안함)
+                            "18x18_valid": False,  # 검증 안함으로 처리
+                            "cross_valid": False,   # 검증 안함으로 처리
+                            "skip_18x18": True,    # 18x18 검증 생략 여부
                             "has_duplicate_44x44": False,
                             "duplicate_page": None,
                             "has_warnings": False,
@@ -1631,11 +1679,12 @@ def main():
                     else:  # "18x18" 모드
                         # 18x18만 검증 모드 - 44x44 관련 검증 사용 안함
                         page_results[slide_num] = {
-                            "44x44_found": True,  # 항상 True로 처리 (바코드가 없어도 오류 표시 안함)
+                            "44x44_found": False,  # 검증 안함으로 처리
                             "18x18_found": False,
-                            "44x44_valid": True,  # 항상 True로 처리
+                            "44x44_valid": False,  # 검증 안함으로 처리
                             "18x18_valid": False,
-                            "cross_valid": True,   # 항상 True로 처리 (교차 검증 사용 안함)
+                            "cross_valid": False,   # 검증 안함으로 처리
+                            "skip_44x44": True,    # 44x44 검증 생략 여부
                             "has_duplicate_44x44": False,
                             "duplicate_page": None,
                             "has_warnings": False,
@@ -1789,10 +1838,8 @@ def main():
                         # 단일 검증 모드인 경우
                         if st.session_state.validation_mode == "44x44" and data_44x44:
                             st.info("현재 '44x44만 검증' 모드입니다. 교차 검증을 실행하려면 '둘 다 검증' 모드를 선택하세요.")
-                            page_results[slide_num]["cross_valid"] = True  # 단일 바코드 모드에서는 교차 검증 성공으로 처리
                         elif st.session_state.validation_mode == "18x18" and data_18x18:
                             st.info("현재 '18x18만 검증' 모드입니다. 교차 검증을 실행하려면 '둘 다 검증' 모드를 선택하세요.")
-                            page_results[slide_num]["cross_valid"] = True  # 단일 바코드 모드에서는 교차 검증 성공으로 처리
             
             # 페이지간 추가 검증 실행
             if page_results:
