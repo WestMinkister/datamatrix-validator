@@ -1,0 +1,4 @@
+libdmtx0b
+libdmtx-dev
+libreoffice
+poppler-utils
