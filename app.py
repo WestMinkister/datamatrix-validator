@@ -445,9 +445,9 @@ def validate_44x44_matrix(data, b_range_check=False, b_min_value=0, b_max_value=
     for B_set in B_sets:
         if B_set != '0000':
             if prev_set:
-                # 오름차순 확인
+                # 오름차순 확인 - 여기를 경고로 변경
                 if int(B_set) <= int(prev_set):
-                    result["errors"].append(f"B 식별자: 숫자 세트가 오름차순이 아닙니다 ({prev_set} -> {B_set})")
+                    result["warnings"].append(f"B 식별자: 숫자 세트가 오름차순이 아닙니다 ({prev_set} -> {B_set})")
                 # 큰 점프 확인 (100 초과)
                 elif int(B_set) - int(prev_set) > 100:
                     result["warnings"].append(f"B 식별자: 숫자 세트 간에 큰 점프가 있습니다 ({prev_set} -> {B_set}, 차이: {int(B_set) - int(prev_set)})")
@@ -460,7 +460,7 @@ def validate_44x44_matrix(data, b_range_check=False, b_min_value=0, b_max_value=
     result["has_warnings"] = len(result["warnings"]) > 0
     
     return result
-
+    
 def validate_18x18_matrix(data):
     """18x18 매트릭스 데이터 검증 함수"""
     result = {"valid": False, "errors": [], "data": {}, "pattern_match": False}
@@ -1050,9 +1050,9 @@ def validate_pages_s_values(page_results):
             else:
                 s_values[s_value] = page_num
         
-        # B 세트 오름차순에 따른 S 값 검증
-        # 먼저 B 세트의 첫 번째 유효한 값(0000이 아닌)을 기준으로 정렬
-        pages_with_b = []
+        # B 세트 오름차순에 따른 S 값 검증 (수정된 로직)
+        # 각 페이지의 B 세트 첫 번째 및 마지막 유효값 구하기
+        pages_with_b_details = []
         for page_num, s_value, b_value in pages:
             # B 세트 파싱 (4자리씩)
             b_sets = []
@@ -1064,30 +1064,61 @@ def validate_pages_s_values(page_results):
             
             if b_sets:  # 유효한 B 세트가 있는 경우
                 first_valid_b = min(b_sets)  # 가장 작은 B 값
-                pages_with_b.append((page_num, int(s_value), first_valid_b))
+                last_valid_b = max(b_sets)   # 가장 큰 B 값
+                pages_with_b_details.append((page_num, int(s_value), first_valid_b, last_valid_b, b_sets))
         
-        # B 세트 기준으로 정렬
-        pages_with_b.sort(key=lambda x: x[2])  # B 값 기준 정렬
+        # B 세트의 첫 번째 값 기준으로 정렬
+        pages_with_b_details.sort(key=lambda x: x[2])  # B 첫 번째 값 기준 정렬
         
-        # S 값이 순차적(1씩 증가)인지 확인
-        expected_s = 1
-        for index, (page_num, s_value, _) in enumerate(pages_with_b):
-            # S 값은 3자리 숫자여야 하고, 1부터 시작해서 순차적으로 증가해야 함
-            expected_s_str = f"{expected_s:03d}"  # 예: 001, 002, 003, ...
+        # S 값 순차 증가 검증 (무조건 1부터 시작이 아닌, 연속적인 증가만 확인)
+        prev_page_num = None
+        prev_s_value = None
+        prev_last_b = None
+        
+        for index, (page_num, s_value, first_b, last_b, b_sets) in enumerate(pages_with_b_details):
+            if index > 0:  # 첫 번째 페이지가 아닌 경우
+                # S 값이 이전 S 값에서 1 증가해야 함
+                expected_s = prev_s_value + 1
+                
+                # B 세트 연속성 검사 (현재 페이지의 첫 B 값이 이전 페이지의 마지막 B 값보다 커야 함)
+                b_continuity_valid = first_b > prev_last_b
+                
+                if s_value != expected_s:
+                    if page_num not in invalid_s_values:
+                        invalid_s_values[page_num] = {}
+                    
+                    # S 값이 연속적이지 않음 - 경고로 처리
+                    invalid_s_values[page_num]["s_value_out_of_order"] = True
+                    invalid_s_values[page_num]["s_invalid_message"] = f"44x44 매트릭스의 S 값이 {s_value}이지만, 이전 페이지({prev_page_num})의 S 값({prev_s_value}) 기준으로 {expected_s}이어야 합니다."
+                    invalid_s_values[page_num]["s_expected_value"] = f"{expected_s:03d}"
+                
+                # B 세트 연속성 검사 실패 시 경고 추가 (별도 필드로 저장)
+                if not b_continuity_valid:
+                    if page_num not in invalid_s_values:
+                        invalid_s_values[page_num] = {}
+                    
+                    invalid_s_values[page_num]["b_sequence_invalid"] = True
+                    if "s_invalid_message" in invalid_s_values[page_num]:
+                        invalid_s_values[page_num]["s_invalid_message"] += f" 또한, B 세트 첫 값({first_b})이 이전 페이지의 마지막 B 값({prev_last_b})보다 커야 합니다."
+                    else:
+                        invalid_s_values[page_num]["s_invalid_message"] = f"B 세트 첫 값({first_b})이 이전 페이지({prev_page_num})의 마지막 B 값({prev_last_b})보다 커야 합니다."
             
-            if s_value != int(expected_s_str):
-                if page_num not in invalid_s_values:
-                    invalid_s_values[page_num] = {}
-                invalid_s_values[page_num]["s_value_out_of_order"] = True
-                invalid_s_values[page_num]["s_invalid_message"] = f"44x44 매트릭스의 S 값이 {s_value}이지만, B 세트 오름차순 기준 {expected_s_str}이어야 합니다."
-                invalid_s_values[page_num]["s_expected_value"] = expected_s_str
-            
-            expected_s += 1
+            # 현재 페이지 정보를 이전 페이지 정보로 저장
+            prev_page_num = page_num
+            prev_s_value = s_value
+            prev_last_b = last_b
     
     # 결과 업데이트
     for page_num, invalid_info in invalid_s_values.items():
         if page_num in page_results:
-            page_results[page_num]["s_value_invalid"] = True
+            # S 값 중복 오류는 실패로 처리
+            if "s_value_duplicate" in invalid_info:
+                page_results[page_num]["s_value_invalid"] = True
+            # S 값 순서/B 세트 연속성 문제는 "확인 필요"로 처리
+            elif "s_value_out_of_order" in invalid_info or "b_sequence_invalid" in invalid_info:
+                page_results[page_num]["s_value_warning"] = True
+                page_results[page_num]["s_value_invalid"] = False  # 실패가 아닌 경고로 처리
+            
             # 메시지 저장
             if "s_invalid_message" in invalid_info:
                 page_results[page_num]["s_invalid_message"] = invalid_info["s_invalid_message"]
@@ -1099,7 +1130,7 @@ def validate_pages_s_values(page_results):
                 page_results[page_num]["s_expected_value"] = invalid_info["s_expected_value"]
     
     return page_results
-
+    
 # =========================================================
 # 결과 출력 함수 - Streamlit UI용으로 변환
 # =========================================================
@@ -1198,9 +1229,9 @@ def display_summary_results(page_results):
             if result.get("skip_18x18", False):
                 # 18x18 검증이 생략된 경우
                 if result["44x44_found"] and result["44x44_valid"]:
-                    if result["has_duplicate_44x44"]:
+                    if result["has_duplicate_44x44"] or (result.get("s_value_invalid", False) and result.get("s_duplicate_with", None)):
                         validation = "❌ 실패 (페이지간 검증)"
-                    elif result.get("s_value_invalid", False) or result["has_warnings"]:
+                    elif result.get("s_value_warning", False) or (result.get("s_value_invalid", False) and not result.get("s_duplicate_with", None)) or result["has_warnings"]:
                         validation = "⚠️ 확인 필요"
                     else:
                         validation = "✅ 통과"
@@ -1228,9 +1259,9 @@ def display_summary_results(page_results):
                 
         else:  # 둘 다 검증 모드
             if result["44x44_found"] and result["44x44_valid"] and result["18x18_found"] and result["18x18_valid"]:
-                if result["has_duplicate_44x44"] or result.get("p_value_duplicate", False):
+                if result["has_duplicate_44x44"] or result.get("p_value_duplicate", False) or (result.get("s_value_invalid", False) and result.get("s_duplicate_with", None)):
                     validation = "❌ 실패 (페이지간 검증)"
-                elif result.get("s_value_invalid", False) or result["has_warnings"]:
+                elif result.get("s_value_warning", False) or (result.get("s_value_invalid", False) and not result.get("s_duplicate_with", None)) or result["has_warnings"]:
                     validation = "⚠️ 확인 필요"
                 else:
                     validation = "✅ 통과"
@@ -1256,8 +1287,10 @@ def display_summary_results(page_results):
             if result.get("skip_18x18", False):
                 if result["has_duplicate_44x44"]:
                     page_validation_status = "❌ 44x44 중복"
-                elif result.get("s_value_invalid", False):
-                    page_validation_status = "⚠️ S값 불일치"
+                elif result.get("s_value_invalid", False) and result.get("s_duplicate_with", None):
+                    page_validation_status = "❌ S값 중복"
+                elif result.get("s_value_warning", False) or (result.get("s_value_invalid", False) and not result.get("s_duplicate_with", None)):
+                    page_validation_status = "⚠️ S값 확인 필요"
                 else:
                     page_validation_status = "✅ 정상"
             else:
@@ -1277,8 +1310,10 @@ def display_summary_results(page_results):
                 page_validation_status = "❌ 44x44 중복"
             elif result.get("p_value_duplicate", False):
                 page_validation_status = "❌ P값 중복"
-            elif result.get("s_value_invalid", False):
-                page_validation_status = "⚠️ S값 불일치"
+            elif result.get("s_value_invalid", False) and result.get("s_duplicate_with", None):
+                page_validation_status = "❌ S값 중복"
+            elif result.get("s_value_warning", False) or (result.get("s_value_invalid", False) and not result.get("s_duplicate_with", None)):
+                page_validation_status = "⚠️ S값 확인 필요"
             else:
                 page_validation_status = "✅ 정상"
             
@@ -1296,16 +1331,31 @@ def display_summary_results(page_results):
     # 검증 모드에 따라 결과 판단 기준 적용
     if st.session_state.validation_mode == "44x44":  # 44x44만 검증 모드
         overall_valid = all(
-            (result["44x44_found"] and result["44x44_valid"] and not result["has_duplicate_44x44"])
+            (result["44x44_found"] and result["44x44_valid"] and
+             not result["has_duplicate_44x44"] and
+             not (result.get("s_value_invalid", False) and result.get("s_duplicate_with", None)))
             for result in page_results.values()
         )
         
         if overall_valid:
-            st.success("✅ 성공: 모든 페이지의 44x44 바코드 검증이 통과했습니다.")
+            # 확인 필요 항목이 있는지 확인
+            warnings_exist = any(
+                result.get("s_value_warning", False) or
+                (result.get("s_value_invalid", False) and not result.get("s_duplicate_with", None)) or
+                result["has_warnings"]
+                for result in page_results.values()
+            )
+            
+            if warnings_exist:
+                st.warning("⚠️ 주의: 모든 페이지의 44x44 바코드 검증은 통과했지만, 확인이 필요한 항목이 있습니다.")
+            else:
+                st.success("✅ 성공: 모든 페이지의 44x44 바코드 검증이 통과했습니다.")
         else:
             issues_pages = [
                 page_num for page_num, result in page_results.items()
-                if not (result["44x44_found"] and result["44x44_valid"]) or result["has_duplicate_44x44"]
+                if not (result["44x44_found"] and result["44x44_valid"]) or
+                result["has_duplicate_44x44"] or
+                (result.get("s_value_invalid", False) and result.get("s_duplicate_with", None))
             ]
             if issues_pages:
                 st.error(f"❌ 실패: {', '.join(map(str, sorted(issues_pages)))} 페이지의 44x44 바코드에서 문제가 발견되었습니다.")
@@ -1327,25 +1377,42 @@ def display_summary_results(page_results):
                 st.error(f"❌ 실패: {', '.join(map(str, sorted(issues_pages)))} 페이지의 18x18 바코드에서 문제가 발견되었습니다.")
     
     else:  # 둘 다 검증 모드
-        overall_valid = all(
-            result["44x44_found"] and result["44x44_valid"] and
-            result["18x18_found"] and result["18x18_valid"] and
-            result["cross_valid"] and not result["has_duplicate_44x44"] and not result.get("p_value_duplicate", False)
+        # 심각한 오류(실패)가 있는지 확인
+        critical_issues = any(
+            not result["44x44_found"] or not result["44x44_valid"] or
+            not result["18x18_found"] or not result["18x18_valid"] or
+            not result["cross_valid"] or result["has_duplicate_44x44"] or
+            result.get("p_value_duplicate", False) or
+            (result.get("s_value_invalid", False) and result.get("s_duplicate_with", None))
             for result in page_results.values()
         )
         
-        if overall_valid:
-            st.success("✅ 성공: 모든 페이지가 검증을 통과했습니다.")
+        # 경고(확인 필요)가 있는지 확인
+        warnings_exist = any(
+            result.get("s_value_warning", False) or
+            (result.get("s_value_invalid", False) and not result.get("s_duplicate_with", None)) or
+            result["has_warnings"]
+            for result in page_results.values()
+        )
+        
+        if not critical_issues:
+            if warnings_exist:
+                st.warning("⚠️ 주의: 모든 페이지의 기본 검증은 통과했지만, 확인이 필요한 항목이 있습니다.")
+            else:
+                st.success("✅ 성공: 모든 페이지가 검증을 통과했습니다.")
         else:
             issues_pages = [
                 page_num for page_num, result in page_results.items()
                 if not (result["44x44_found"] and result["44x44_valid"] and
                       result["18x18_found"] and result["18x18_valid"] and
-                      result["cross_valid"]) or result["has_duplicate_44x44"] or result.get("p_value_duplicate", False)
+                      result["cross_valid"]) or
+                result["has_duplicate_44x44"] or
+                result.get("p_value_duplicate", False) or
+                (result.get("s_value_invalid", False) and result.get("s_duplicate_with", None))
             ]
             if issues_pages:
                 st.error(f"❌ 실패: {', '.join(map(str, sorted(issues_pages)))} 페이지에서 문제가 발견되었습니다.")
-
+                
 def display_format_help():
     """데이터 매트릭스 형식 정보 출력 (Streamlit 버전)"""
     with st.expander("바코드 형식 안내", expanded=False):

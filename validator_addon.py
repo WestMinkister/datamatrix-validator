@@ -179,10 +179,15 @@ def process_page_validation(page_results, slide_images, page_tabs, session_state
             with page_tabs[list(sorted(slide_images.keys())).index(page_num)]:
                 st.error(f"\u274c 페이지간 검증 오류: {result.get('p_duplicate_message')}")
         
-        # S 값 관련 오류 표시 (44x44 검증 모드일 때만)
-        if session_state.validation_mode in ["both", "44x44"] and result.get("s_value_invalid", False):
-            with page_tabs[list(sorted(slide_images.keys())).index(page_num)]:
-                # S값 불일치는 "확인 필요" 항목으로 표시
-                st.warning(f"\u26a0\ufe0f 페이지간 검증 확인 필요: {result.get('s_invalid_message')}")
+        # S 값 관련 오류/경고 표시 (44x44 검증 모드일 때만)
+        if session_state.validation_mode in ["both", "44x44"]:
+            # S 값 중복은 오류로 표시
+            if result.get("s_value_invalid", False) and result.get("s_duplicate_with", None):
+                with page_tabs[list(sorted(slide_images.keys())).index(page_num)]:
+                    st.error(f"\u274c 페이지간 검증 오류: {result.get('s_invalid_message')}")
+            # S 값 순서나 B 연속성 문제는 경고로 표시
+            elif result.get("s_value_warning", False) or (result.get("s_value_invalid", False) and not result.get("s_duplicate_with", None)):
+                with page_tabs[list(sorted(slide_images.keys())).index(page_num)]:
+                    st.warning(f"\u26a0\ufe0f 페이지간 검증 확인 필요: {result.get('s_invalid_message')}")
     
     return page_results
