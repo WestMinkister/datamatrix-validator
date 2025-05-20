@@ -24,12 +24,16 @@ jobs:
         username: ${{ github.repository_owner }}
         password: ${{ secrets.GITHUB_TOKEN }}
     
+    - name: Get lowercase repository owner
+      id: owner
+      run: echo "OWNER=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+    
     - name: Build and push Docker image
       uses: docker/build-push-action@v2
       with:
         context: .
         push: true
-        tags: ghcr.io/${{ github.repository_owner }}/datamatrix-validator:latest
+        tags: ghcr.io/${{ env.OWNER }}/datamatrix-validator:latestatamatrix-validator:latest
     
     # 배포 단계 - 클라우드 서비스나 서버에 배포
     # 여기서는 Streamlit Cloud 또는 다른 서비스로 배포를 구성할 수 있습니다
