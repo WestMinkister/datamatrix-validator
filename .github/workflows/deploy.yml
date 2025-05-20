@@ -33,7 +33,7 @@ jobs:
       with:
         context: .
         push: true
-        tags: ghcr.io/${{ env.OWNER }}/datamatrix-validator:latestatamatrix-validator:latest
-    
+        tags: ghcr.io/${{ env.OWNER }}/datamatrix-validator:latest
+
     # 배포 단계 - 클라우드 서비스나 서버에 배포
     # 여기서는 Streamlit Cloud 또는 다른 서비스로 배포를 구성할 수 있습니다
