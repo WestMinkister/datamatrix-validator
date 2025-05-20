@@ -732,7 +732,8 @@ def extract_images_from_pdf(file_content, progress_callback=None):
     # PDFIUM으로 시도
     if HAVE_PDFIUM:
         try:
-            # 임시 파일 생성
+            # 임시 파일에 타임스탬프 기반 안전한 이름 사용
+            temp_filename = f"temp_pdf_{time.strftime('%Y%m%d_%H%M%S')}.pdf"
             with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as temp_file:
                 temp_file.write(file_content)
                 temp_path = temp_file.name
@@ -1700,14 +1701,22 @@ def main():
                                     type=["pdf", "pptx", "ppt", "xlsx", "xls"],
                                     help="PDF, PowerPoint 또는 Excel 파일을 업로드하세요. 각 페이지에서 바코드가 검색됩니다.")
         
-    # 파일이 업로드된 경우 처리
     if uploaded_file is not None:
-        # 파일 정보 표시
+        # 원본 파일명 저장
+        original_filename = uploaded_file.name
+        
+        # 임시 파일로 저장할 때는 안전한 ASCII 파일명으로 변환
+        safe_filename = f"uploaded_file_{time.strftime('%Y%m%d_%H%M%S')}"
+        file_extension = original_filename.split('.')[-1].lower()
+        safe_filename_with_ext = f"{safe_filename}.{file_extension}"
+        
+        # 파일 정보 표시 - 원본 파일명 유지
         file_details = {
-            "파일명": uploaded_file.name,
+            "파일명": original_filename,  # 원본 파일명 표시
             "파일 유형": uploaded_file.type,
             "파일 크기": f"{uploaded_file.size / 1024:.1f} KB"
         }
+
         
         st.markdown("### 📄 업로드된 파일 정보")
         for key, value in file_details.items():
@@ -2067,6 +2076,7 @@ def main():
                     file_name=f"datamatrix_report_{time.strftime('%Y%m%d_%H%M%S')}.txt",
                     mime="text/plain",
                 )
+
 
 if __name__ == "__main__":
     main()
